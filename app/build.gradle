@@ -1,0 +1,152 @@
+plugins {
+    alias(libs.plugins.android.application)
+    // Nếu bạn muốn sử dụng Kotlin trong dự án này (dù chỉ một phần nhỏ),
+    // hãy thêm plugin Kotlin Android sau:
+    // id 'org.jetbrains.kotlin.android' version 'X.Y.Z' // Thay X.Y.Z bằng phiên bản Kotlin Gradle Plugin bạn muốn dùng
+    // Hoặc nếu bạn đã định nghĩa nó trong libs.versions.toml:
+    // alias(libs.plugins.kotlin.android)
+}
+// Chạy terminal để kiểm tra dependencies và cảnh báo:
+// ./gradlew app:dependencies --configuration implementation --warning-mode all
+// ./gradlew app:dependencies --configuration implementation
+
+android {
+    namespace 'com.example.crawlertbdgemini2modibasicview'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.example.crawlertbdgemini2modibasicview"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments += ["room.schemaLocation": "$projectDir/schemas".toString()]
+            }
+        }
+        // Thêm dòng này nếu bạn gặp lỗi dex count limit (có thể xảy ra với nhiều thư viện)
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    buildFeatures {
+        viewBinding true
+    }
+    // Đã XÓA hoàn toàn khối 'kotlinOptions {}' vì nó không được nhận diện
+    // trừ khi plugin Kotlin Android được áp dụng cho module này.
+
+
+}
+
+// === CÁCH KHẮC PHỤC LỖI "options" HOẶC "compilerArgs" KHÔNG TÌM THẤY ===
+// Thêm đoạn mã này ĐẶT BÊN NGOÀI khối 'android {}'
+// Điều này sẽ áp dụng đối số trình biên dịch cho TẤT CẢ các tác vụ biên dịch Java trong dự án.
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.add("-Xlint:deprecation")
+}
+
+dependencies {
+    // AndroidX Core & UI
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.constraintlayout
+    implementation libs.activity
+    implementation libs.navigation.fragment
+    implementation libs.navigation.ui
+
+    // Room Database
+    implementation libs.room.common
+    implementation libs.room.runtime
+    implementation libs.recyclerview
+    annotationProcessor libs.room.compiler
+
+    // Lifecycle components
+    // Giữ phiên bản 2.6.1 theo yêu cầu của bạn để tránh lỗi nullpointer
+    implementation(libs.lifecycle.runtime.compose) // Version 2.6.1
+    implementation libs.lifecycle.viewmodel.savedstate // Version 2.2.0
+
+    // Google Services (nếu bạn sử dụng chúng, ví dụ: location services)
+    // implementation "com.google.android.gms:play-services-location:21.3.0"
+
+    // Testing
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+
+    // Utility Libraries
+    implementation libs.gson // Thư viện xử lý JSON
+    implementation libs.gridlayout // GridLayout
+    implementation libs.work.runtime // WorkManager runtime (2.8.1)
+
+    // Guava: Cung cấp class 'Futures' (ví dụ: Futures.immediateFuture)
+    // Đã thay thế libs.listenablefuture bằng libs.guava để có đầy đủ chức năng
+    implementation libs.guava
+
+    // Jsoup: Thư viện để phân tích HTML
+    implementation libs.jsoup
+
+    // Apache Commons Text: Thư viện xử lý văn bản
+    implementation libs.commons.text
+
+    // Apache POI for Excel export
+    //implementation 'org.apache.poi:poi-ooxml:5.3.0'
+    //implementation libs.poi // Base POI library
+    //implementation "org.apache.poi:poi:5.4.0"
+    implementation libs.poi
+    implementation libs.poi.ooxml
+
+//    implementation (org.apache.poi:poi-ooxml:5.3.0) {
+//        // Loại trừ xml-apis để tránh xung đột với các lớp XML của Android nếu có
+//        exclude group: 'xml-apis', module: 'xml-apis'
+//    }
+    // THÊM CÁC PHỤ THUỘC BỊ THIẾU MỘT CÁCH RÕ RÀNG cho POI-OOXML
+    // Apache XMLBeans - CẦN THIẾT cho poi-ooxml
+    implementation libs.xmlbeans
+
+    // Apache Commons Collections4 - CẦN THIẾT cho một số chức năng của POI
+    implementation libs.commons.collections4
+
+    // CurvesAPI - CẦN THIẾT cho một số hình dạng và đối tượng đồ họa trong OOXML
+    implementation libs.curvesapi
+
+    // JDOM2: Một thư viện XML khác
+    implementation libs.jdom2
+
+    /////////////////////////
+//    implementation 'com.github.pablo67340:apache-poi-android:4.1.2' // Hoặc phiên bản mới nhất bạn tìm thấy
+//    // Nếu bạn đang dùng các phiên bản poi khác như ooxml, xoorg, có thể cần thêm các bản tương ứng
+//    // Ví dụ:
+//     implementation 'com.github.pablo67340:poi-ooxml-android:4.1.2'
+//    implementation "com.github.SUPERCILEX.poi-android:poi:$poiVersion"
+//    implementation "com.github.SUPERCILEX.poi-android:poi:4.1.2"  //5.3.0; 5.4.0
+//    implementation libs.poi  //5.3.0; 5.4.0
+//    implementation "com.github.SUPERCILEX.poi-android:ooxml:5.3.0"
+
+    //implementation 'org.apache.poi:poi-ooxml:5.3.0'
+
+
+    // Android Core utilities
+    //implementation libs.core
+    implementation "androidx.core:core:1.16.0" // hoặc phiên bản mới nhất
+    implementation libs.preference
+
+    // Log4j2 (nếu bạn sử dụng LogManager trong MyWorkerCrawler)
+    // Cần thiết nếu bạn dùng LogManager.getLogger().
+    // Tuy nhiên, việc cấu hình Log4j2 trên Android thường phức tạp.
+    // Đề xuất sử dụng android.util.Log.d(), Log.e() trực tiếp để đơn giản hơn.
+    // Nếu bạn thực sự cần Log4j2, bạn sẽ phải thêm các dependency và cấu hình
+    // implementation 'org.apache.logging.log4j:log4j-api:2.x.x'
+    // implementation 'org.apache.logging.log4j:log4j-core:2.x.x'
+}

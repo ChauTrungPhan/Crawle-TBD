@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Cho phép FileProvider truy cập thư mục app-specific external storage
+        1/ Thư mục ánh xạ: /storage/emulated/0/Android/data/<package>/files/
+        2/ Xuất file, share qua Gmail, Drive
+    -->
+    <external-files-path
+        name="app_files"
+        path="." />
+
+    <!-- Nếu lưu riêng vào Documents bên trong app-specific
+        1/ Thư mục ánh xạ: /storage/emulated/0/Android/data/<package>/files/Documents/
+        2/ Xuất riêng vào /Documents
+    -->
+    <external-files-path
+        name="app_documents"
+        path="Documents/" />
+
+    <!-- Cho phép truy cập file trong internal files
+        1/ Thư mục ánh xạ: /data/data/<package>/files/
+        2/ Khi lưu nội bộ
+        -->
+    <files-path
+        name="internal_files"
+        path="." />
+
+    <!-- Cho phép truy cập cache internal
+        1/ Thư mục ánh xạ: /data/data/<package>/cache/
+        2/ Cache tạm
+        -->
+    <cache-path
+        name="cache_files"
+        path="." />
+
+</paths>
