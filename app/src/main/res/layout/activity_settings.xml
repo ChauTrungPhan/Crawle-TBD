@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsActivity"
+    android:padding="16dp">
+
+    <RadioGroup
+        android:id="@+id/radioGroup"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/btn_save"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.1"
+        app:layout_constraintWidth_default="wrap">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crawler_url"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <RadioButton
+            android:id="@+id/radioUrl2kt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crawler_2_char"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioUrl3kt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crawler_3_char" />
+
+        <View
+            android:id="@+id/divider"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginVertical="16dp"
+            android:background="#CCCCCC" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crawler_custom_string"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"/>
+
+        <RadioButton
+            android:id="@+id/radioTuyChonKyTu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/crawler_custom_string" />
+
+        <EditText
+            android:id="@+id/etCustomCrawlString"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/crawler_custom_string_hint"
+            android:inputType="text"
+            android:visibility="gone" />
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/btn_save"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/save_settings"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/radioGroup"
+        app:layout_constraintVertical_bias="1.0" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
