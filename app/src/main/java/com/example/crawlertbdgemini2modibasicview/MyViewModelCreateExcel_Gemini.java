@@ -28,7 +28,7 @@ public class MyViewModelCreateExcel_Gemini extends AndroidViewModel {
     private final ExecutorService excelExportExecutor; // CHỈNH SỬA: ExecutorService cho tác vụ xuất Excel
     private final ExcelExporterOptimized_goc excelExporterOptimized;
 
-    public MyViewModelCreateExcel_Gemini(@NonNull Application application, ExcelExporterOptimized_goc excelExporterOptimized) {
+    public MyViewModelCreateExcel_Gemini(@NonNull Application application, ExcelExporterOptimized excelExporterOptimized) {
         super(application);
         workManager = WorkManager.getInstance(application);
         this.excelExporterOptimized = excelExporterOptimized;

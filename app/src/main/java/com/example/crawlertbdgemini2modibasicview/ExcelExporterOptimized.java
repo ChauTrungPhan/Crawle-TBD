@@ -99,7 +99,7 @@ public class ExcelExporterOptimized {
 
         try {
             // Mở kết nối cơ sở dữ liệu MỘT LẦN duy nhất cho toàn bộ quá trình xuất
-            db = DBHelperThuoc.getInstance(context).getReadableDatabase();
+            db = DBHelperThuoc_Old.getInstance(context).getReadableDatabase();
             Log.d(TAG, "Database opened in exportExcelSmart.");
 
             // Đếm tổng số hàng (Sử dụng Cursor cục bộ và đóng ngay)
@@ -192,12 +192,12 @@ public class ExcelExporterOptimized {
         String tableThuocCon = crawlType.getTableThuocName();   // Alias: Bảng con
         String tableUrlsParent;                                 // Alias: Bảng Cha
         if (crawlType.getSettingIdName().endsWith("2kt")) {
-            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_2KT;
+            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_2KT;
 
         } else if (crawlType.getSettingIdName().endsWith("3kt")) {
-            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_3KT;
+            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_3KT;
         } else {
-            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_CUSTOM;
+            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_CUSTOM;
         }
 
         // Các cấu trúc dữ liệu toàn cục cho quá trình xuất (chia sẻ giữa các sheet)
@@ -222,11 +222,11 @@ public class ExcelExporterOptimized {
         //
         // Chuẩn bị danh sách tất cả các cột cần truy vấn
         List<String> allColumns = new ArrayList<>();
-        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
             allColumns.add(col.dbColumnName);
             if (col.dbLinkColumnName != null) allColumns.add(col.dbLinkColumnName);
         }
-        allColumns.add(DBHelperThuoc.INDEX_COLOR);
+        allColumns.add(DBHelperThuoc_Old.INDEX_COLOR);
         String queryCols = TextUtils.join(", ", allColumns);
 
         // --- Khởi tạo sheet đầu tiên với tiêu đề và header ---
@@ -249,47 +249,47 @@ public class ExcelExporterOptimized {
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT\n")
         //CHA
-        .append("p").append(".").append(DBHelperThuoc.ID).append(" AS url_id,\n")    // CẦN
+        .append("p").append(".").append(DBHelperThuoc_Old.ID).append(" AS url_id,\n")    // CẦN
         //.append("p").append("." + DBHelperThuoc.PARENT_ID + " AS p_parent_id,\n")
-        .append("p").append("." + DBHelperThuoc.PARENT_ID + " AS parent_id,\n") // NOT NULL
+        .append("p").append("." + DBHelperThuoc_Old.PARENT_ID + " AS parent_id,\n") // NOT NULL
 
         //.append("p").append("." + DBHelperThuoc.LEVEL + " AS p_level,\n")
-        .append("p").append("." + DBHelperThuoc.LEVEL + ",\n")                  // NOT NULL
+        .append("p").append("." + DBHelperThuoc_Old.LEVEL + ",\n")                  // NOT NULL
         //.append("p").append("." + DBHelperThuoc.URL_P + " AS url_p,\n") // link
-        .append("p").append("." + DBHelperThuoc.URL + " AS " + DBHelperThuoc.URL_P + ",\n")    // link cha: KHÔNG THỂ NULL
-                .append("p").append("." + DBHelperThuoc.MA_THUOC + " AS " + DBHelperThuoc.MA_THUOC_P + ",\n")   // Giả: lấy từ url
+        .append("p").append("." + DBHelperThuoc_Old.URL + " AS " + DBHelperThuoc_Old.URL_P + ",\n")    // link cha: KHÔNG THỂ NULL
+                .append("p").append("." + DBHelperThuoc_Old.MA_THUOC + " AS " + DBHelperThuoc_Old.MA_THUOC_P + ",\n")   // Giả: lấy từ url
 
         //.append("p").append("." + DBHelperThuoc.GHI_CHU + " AS p_ghi_chu,\n")
-        .append("p").append("." + DBHelperThuoc.GHI_CHU + ",\n")
+        .append("p").append("." + DBHelperThuoc_Old.GHI_CHU + ",\n")
         //.append("p").append("." + DBHelperThuoc.INDEX_COLOR + " AS p_index_color,\n")
-        .append("p").append("." + DBHelperThuoc.INDEX_COLOR + ",\n")
+        .append("p").append("." + DBHelperThuoc_Old.INDEX_COLOR + ",\n")
         //.append("p").append("." + DBHelperThuoc.LAST_UPDATED + " AS p_last_updated,\n");
-        .append("p").append("." + DBHelperThuoc.LAST_UPDATED + ",\n");
+        .append("p").append("." + DBHelperThuoc_Old.LAST_UPDATED + ",\n");
 
         //CON
             // VẪN LẤY PARENT_ID, LEVEL VÌ MỤC ĐÍCH XẮP XẾP EXCEL: NẾU BỎ SẼ LẤY GIÁ TRỊ TỪ BẢNG CHA
         //sb.append("c").append(".").append(DBHelperThuoc.PARENT_ID).append(",\n");   // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
         //sb.append("c").append("." + DBHelperThuoc.LEVEL + ",\n");           // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
         //sb.append("c").append("." + DBHelperThuoc.KY_TU_SEARCH + ",\n");    // LẤY TỪ URL
-        sb.append("c").append("." + DBHelperThuoc.MA_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.MA_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.TEN_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.THANH_PHAN + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.THANH_PHAN_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.NHOM_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.NHOM_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.DANG_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.DANG_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.SAN_XUAT + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.SAN_XUAT_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.DANG_KY + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.DANG_KY_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.PHAN_PHOI + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.PHAN_PHOI_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.SDK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.SDK_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.CAC_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc.CAC_THUOC_LINK + "\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.MA_THUOC + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.MA_THUOC_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.TEN_THUOC + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.THANH_PHAN + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.THANH_PHAN_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.NHOM_THUOC + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.NHOM_THUOC_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.DANG_THUOC + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.DANG_THUOC_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.SAN_XUAT + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.SAN_XUAT_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.DANG_KY + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.DANG_KY_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.PHAN_PHOI + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.PHAN_PHOI_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.SDK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.SDK_LINK + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.CAC_THUOC + ",\n");
+        sb.append("c").append("." + DBHelperThuoc_Old.CAC_THUOC_LINK + "\n");
         //sb.append("c").append("." + DBHelperThuoc.GHI_CHU + ",\n"); // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
         //sb.append("c").append("." + DBHelperThuoc.INDEX_COLOR + "\n");
 
@@ -330,19 +330,19 @@ public class ExcelExporterOptimized {
 
                 // Lấy chỉ mục cột từ Cursor CHỈ MỘT LẦN (khi xử lý lô đầu tiên)
                 if (cursorColumnIndices.isEmpty()) { // Kiểm tra nếu chưa được khởi tạo
-                    for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+                    for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
                         cursorColumnIndices.put(col.dbColumnName, cursor.getColumnIndex(col.dbColumnName));
                         if (col.dbLinkColumnName != null) {
                             cursorColumnIndices.put(col.dbLinkColumnName, cursor.getColumnIndex(col.dbLinkColumnName));
                         }
                     }
-                    colorIndex = cursor.getColumnIndex(DBHelperThuoc.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
+                    colorIndex = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
                     Log.d(TAG, "Column indices initialized for the first batch.");
                 }
 
                 int colorIndexCha = -1; // Khởi tạo với giá trị không hợp lệ
                 //colorIndexCha = cursor.getColumnIndex(p_ALIAS_INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
-                colorIndexCha = cursor.getColumnIndex(DBHelperThuoc.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
+                colorIndexCha = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
                 // Duyệt qua từng record trong lô hiện tại
                 if (cursor.moveToFirst()) {
                     do {
@@ -373,11 +373,11 @@ public class ExcelExporterOptimized {
 
                         // Lấy dữ liệu từ kết quả JOIN
                         // Các thông số từ cột cha
-                        int urlId = cursor.getInt(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_ID));
+                        int urlId = cursor.getInt(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_ID));
                         //String url = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_P));
                         //String url = cursor.getString(cursor.getColumnIndexOrThrow(p_ALIAS_URL));
                         //String createdAt = cursor.getString(cursor.getColumnIndex("created_at"));
-                        String errMessage = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.GHI_CHU));
+                        String errMessage = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.GHI_CHU));
                         //String errMessage = cursor.getString(cursor.getColumnIndexOrThrow(p_ALIAS_GHI_CHU));
                         rawColor = cursor.isNull(colorIndexCha) ? 0 : cursor.getInt(colorIndexCha);
 
@@ -385,7 +385,7 @@ public class ExcelExporterOptimized {
                         if (urlId != lastUrlId) {
                             // Ghi thông tin bảng cha
                             // Ghi dữ liệu của hàng hiện tại vào sheetContent
-                            writeRowCha(sheetContent, cursor, currentRowInSheet, DBHelperThuoc.EXPORT_COLUMNS_CHA,
+                            writeRowCha(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS_CHA,
                                     sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, colorIndexCha);
 
 //                            writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc.EXPORT_COLUMNS,
@@ -401,7 +401,7 @@ public class ExcelExporterOptimized {
                             currentRowInSheet++; // Tăng 1 dòng CHO HÀNG SAU trong sheet
                         }
                         // Ghi dữ liệu của hàng hiện tại (con) vào sheetContent: rawColor= 0: CÁC HÀNG CON KHÔNG TÔ MÀU
-                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc.EXPORT_COLUMNS,
+                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS,
                                 sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, colorIndex, cursorColumnIndices);
                         currentRowInSheet++; // Tăng 1 dòng CHO HÀNG SAU trong sheet
                         totalExportedRecords++; // Tăng tổng số bản ghi đã xuất
@@ -511,11 +511,11 @@ public class ExcelExporterOptimized {
 
         // Chuẩn bị danh sách tất cả các cột cần truy vấn
         List<String> allColumns = new ArrayList<>();
-        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
             allColumns.add(col.dbColumnName);
             if (col.dbLinkColumnName != null) allColumns.add(col.dbLinkColumnName);
         }
-        allColumns.add(DBHelperThuoc.INDEX_COLOR);
+        allColumns.add(DBHelperThuoc_Old.INDEX_COLOR);
         String queryCols = TextUtils.join(", ", allColumns);
 
         // --- Khởi tạo sheet đầu tiên với tiêu đề và header ---
@@ -537,7 +537,7 @@ public class ExcelExporterOptimized {
             try {
                 // Truy vấn dữ liệu theo lô
                 String batchQuery = "SELECT " + queryCols + " FROM " + tableThuoc +
-                        " ORDER BY " + DBHelperThuoc.PARENT_ID + ", " + DBHelperThuoc.LEVEL +
+                        " ORDER BY " + DBHelperThuoc_Old.PARENT_ID + ", " + DBHelperThuoc_Old.LEVEL +
                         " LIMIT " + BATCH_SIZE + " OFFSET " + offset;
                 cursor = db.rawQuery(batchQuery, null);
                 Log.d(TAG, "Executing batch query: " + batchQuery);
@@ -549,13 +549,13 @@ public class ExcelExporterOptimized {
 
                 // Lấy chỉ mục cột từ Cursor CHỈ MỘT LẦN (khi xử lý lô đầu tiên)
                 if (cursorColumnIndices.isEmpty()) { // Kiểm tra nếu chưa được khởi tạo
-                    for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+                    for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
                         cursorColumnIndices.put(col.dbColumnName, cursor.getColumnIndex(col.dbColumnName));
                         if (col.dbLinkColumnName != null) {
                             cursorColumnIndices.put(col.dbLinkColumnName, cursor.getColumnIndex(col.dbLinkColumnName));
                         }
                     }
-                    colorIndex = cursor.getColumnIndex(DBHelperThuoc.INDEX_COLOR);
+                    colorIndex = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);
                     Log.d(TAG, "Column indices initialized for the first batch.");
                 }
 
@@ -589,7 +589,7 @@ public class ExcelExporterOptimized {
                         rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
 
                         // Ghi dữ liệu của hàng hiện tại vào sheetContent
-                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc.EXPORT_COLUMNS,
+                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS,
                                 sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor, cursorColumnIndices);
                         currentRowInSheet++; // Tăng số dòng trong sheet
                         totalExportedRecords++; // Tăng tổng số bản ghi đã xuất
@@ -722,8 +722,8 @@ public class ExcelExporterOptimized {
         tempRowNum++;
         sheetContent.append("<row r=\"").append(tempRowNum).append("\">\n");
         int colIndexHeader = 0;
-        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
-            if (DBHelperThuoc.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
+        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
+            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
             String cellRef = getCellRef(colIndexHeader, tempRowNum - 1);
             int strIdx = sharedStringsMap.computeIfAbsent(col.headerName, k -> {
                 sharedStringList.add(k);
@@ -739,7 +739,7 @@ public class ExcelExporterOptimized {
     private static void writeRowCha(StringBuilder sheetContent,
                                  Cursor cursor,
                                  int rowNumInSheet,
-                                 List<DBHelperThuoc.ColumnInfoUrlCha> columns,
+                                 List<DBHelperThuoc_Old.ColumnInfoUrlCha> columns,
                                  Map<String, Integer> sharedStringsMap,
                                  List<String> sharedStringList,
                                  List<String> hyperlinks,
@@ -761,8 +761,8 @@ public class ExcelExporterOptimized {
         // Chỉ tô màu hàng cha
         int rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
 
-        for (DBHelperThuoc.ColumnInfoUrlCha col : columns) {
-            if (DBHelperThuoc.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
+        for (DBHelperThuoc_Old.ColumnInfoUrlCha col : columns) {
+            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
 
             // Nguyên mẫu của Con khi chạy chưa có quan hệ cha con
 
@@ -786,19 +786,19 @@ public class ExcelExporterOptimized {
             // Sửa lại theo quan hệ cha con
             String value;
             String link = null;
-            if (col.dbColumnName.equals(DBHelperThuoc.KY_TU_SEARCH)) {
-                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_P));
+            if (col.dbColumnName.equals(DBHelperThuoc_Old.KY_TU_SEARCH)) {
+                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
                 value = Utils.getKyTuSeach(linkKyTuSearch);   // link để lấy Ky_tu_search, lấy xong gfasn lại là null
             } else {
                 value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
             }
 
-            if (col.dbColumnName.equals(DBHelperThuoc.MA_THUOC_P)) {
-                link = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_P));
+            if (col.dbColumnName.equals(DBHelperThuoc_Old.MA_THUOC_P)) {
+                link = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
                 value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
             }
-            if (col.dbColumnName.equals(DBHelperThuoc.TEN_THUOC)) {
-                value = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.GHI_CHU));
+            if (col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC)) {
+                value = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.GHI_CHU));
             }
             //if (value == null || value.isEmpty()) continue; // VẪN PHẢI GHI MÀU SĂC
 
@@ -815,7 +815,7 @@ public class ExcelExporterOptimized {
                     rawColor);
 
             // Cho nhanh
-            if (rawColor == 0 && col.dbColumnName.equals(DBHelperThuoc.TEN_THUOC) && (value == null||value.isEmpty())) {
+            if (rawColor == 0 && col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC) && (value == null||value.isEmpty())) {
                 // kết thúc
                 break;
             }
@@ -845,7 +845,7 @@ public class ExcelExporterOptimized {
     private static void writeRow(StringBuilder sheetContent,
                                  Cursor cursor,
                                  int rowNumInSheet,
-                                 List<DBHelperThuoc.ColumnInfo> columns,
+                                 List<DBHelperThuoc_Old.ColumnInfo> columns,
                                  Map<String, Integer> sharedStringsMap,
                                  List<String> sharedStringList,
                                  List<String> hyperlinks,
@@ -860,13 +860,13 @@ public class ExcelExporterOptimized {
         //int rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
         int rawColor = 0;
 
-        for (DBHelperThuoc.ColumnInfo col : columns) {
-            if (DBHelperThuoc.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
+        for (DBHelperThuoc_Old.ColumnInfo col : columns) {
+            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
 
             String value;
             String link = null;
-            if (col.dbColumnName.equals(DBHelperThuoc.KY_TU_SEARCH)) {
-                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_P));
+            if (col.dbColumnName.equals(DBHelperThuoc_Old.KY_TU_SEARCH)) {
+                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
                 value = Utils.getKyTuSeach(linkKyTuSearch);   // link để lấy Ky_tu_search, lấy xong gfasn lại là null
             } else {
                 //value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
@@ -891,7 +891,7 @@ public class ExcelExporterOptimized {
 
             String cellRef = getCellRef(excelColIndex, rowNumInSheet - 1);
             // XEM
-            if (col.dbColumnName.equals(DBHelperThuoc.TEN_THUOC)) {
+            if (col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC)) {
                 int Stop = 0;
             }
             writeCell(sheetContent, cellRef, value, link,
@@ -978,7 +978,7 @@ public class ExcelExporterOptimized {
         String result = null;
         long seconds = 0;   // Xem lại , vì time java bắt đầu 1/1/1970?
         //String sql = "SELECT " + type + "(created_at) AS result FROM " + tableName; //LAST_UPDATED
-        String sql = "SELECT " + type + "("+DBHelperThuoc.LAST_UPDATED+") AS result FROM " + tableUrlCha; //LAST_UPDATED
+        String sql = "SELECT " + type + "("+ DBHelperThuoc_Old.LAST_UPDATED+") AS result FROM " + tableUrlCha; //LAST_UPDATED
         try {
             //result = DatabaseUtils.stringForQuery(db, sql, null);       // Trả về số Time giây INTEGER
             seconds = Long.parseLong(DatabaseUtils.stringForQuery(db, sql, null));       // Trả về số Time giây INTEGER

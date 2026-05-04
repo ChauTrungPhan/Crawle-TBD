@@ -12,7 +12,6 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.example.crawlertbdgemini2modibasicview.utils.CrawlType;
 import com.example.crawlertbdgemini2modibasicview.utils.SettingsRepository;
-import com.example.crawlertbdgemini2modibasicview.utils.Utils;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -63,7 +62,7 @@ public class ExportViewModel extends AndroidViewModel  {
 
     //private ExcelExporter exporter;
     private ExcelExporterOptimized_goc excelExporterOptimized;
-    private final DBHelperThuoc dbHelperThuoc; // Để quản lý cơ sở dữ liệu
+    private final DBHelperThuoc_Old dbHelperThuoc; // Để quản lý cơ sở dữ liệu
     //private SQLiteDatabase dbThuoc;
 
     private final Context applicationContext; // Thêm biến này để lưu application context
@@ -78,7 +77,7 @@ public class ExportViewModel extends AndroidViewModel  {
         // Khởi tạo executorService ở đây nếu chưa có
         excelExecutor = Executors.newSingleThreadExecutor();
         //
-        dbHelperThuoc = DBHelperThuoc.getInstance(this.applicationContext); // Hoặc bạn có thể nhận nó qua constructor nếu đang dùng Factory
+        dbHelperThuoc = DBHelperThuoc_Old.getInstance(this.applicationContext); // Hoặc bạn có thể nhận nó qua constructor nếu đang dùng Factory
 
         this.settingsRepository = new SettingsRepository(application); // Khởi tạo SettingsRepository
         // exporter = new ExcelExporter(executorService, application);
@@ -87,7 +86,7 @@ public class ExportViewModel extends AndroidViewModel  {
     }
 
     // CHỈNH SỬA: Phương thức mới để bắt đầu xuất Excel
-    public void exportToExcel(boolean isXmlExport, DBHelperThuoc dbHelper ,
+    public void exportToExcel(boolean isXmlExport, DBHelperThuoc_Old dbHelper ,
                               String tableName, String filePath) {
         //SQLiteDatabase db = dbHelper.getReadableDatabase();
 

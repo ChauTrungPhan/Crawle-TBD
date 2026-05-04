@@ -8,10 +8,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.crawlertbdgemini2modibasicview.databinding.ActivityErrorListBinding;
-import com.example.crawlertbdgemini2modibasicview.databinding.ActivityMainBinding;
 import com.example.crawlertbdgemini2modibasicview.utils.CrawlType;
 import com.example.crawlertbdgemini2modibasicview.utils.SettingsRepository;
 
@@ -37,7 +35,7 @@ public class ErrorListActivity extends AppCompatActivity {
         binding.recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
         //DBHelperThuoc dbHelper = new DBHelperThuoc(this);
-        DBHelperThuoc dbHelper = DBHelperThuoc.getInstance(this.getApplicationContext());
+        DBHelperThuoc_Old dbHelper = DBHelperThuoc_Old.getInstance(this.getApplicationContext());
         CrawlType crawlType = new SettingsRepository(this.getApplicationContext()).getSelectedCrawlType();
         List<ErrorUrl> errors = dbHelper.getListErrorUrls(crawlType);
 

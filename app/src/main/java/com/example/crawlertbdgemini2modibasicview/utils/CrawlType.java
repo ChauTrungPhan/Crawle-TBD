@@ -1,19 +1,12 @@
 package com.example.crawlertbdgemini2modibasicview.utils;
 
-import android.content.ContentValues;
-import android.database.sqlite.SQLiteDatabase;
-import android.util.Log;
-
 import com.example.crawlertbdgemini2modibasicview.AppConstants;
-import com.example.crawlertbdgemini2modibasicview.DBHelperThuoc;
+import com.example.crawlertbdgemini2modibasicview.DBHelperThuoc_Old;
 import com.example.crawlertbdgemini2modibasicview.GetKyTuAZ;
-import com.example.crawlertbdgemini2modibasicview.UrlInfo;
 
 //import org.apache.logging.log4j.LogManager;
 //import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
 
 public enum CrawlType {
 
@@ -22,9 +15,9 @@ public enum CrawlType {
             "Phương pháp Crawl 2 Ký tự",
             "2kt", // <-- loai_thuoc DB value
             // Table Cha
-            DBHelperThuoc.TABLE_PARENT_URLS_2KT, // <-- Giữ lại tableName cũ nếu vẫn cần cho DBHelperThuoc hoặc logging
-            DBHelperThuoc.TABLE_THUOC_2KT,   // Là bảng initUrlTable
-            DBHelperThuoc.TABLE_URLS_QUEUE_2KT,
+            DBHelperThuoc_Old.TABLE_PARENT_URLS_2KT, // <-- Giữ lại tableName cũ nếu vẫn cần cho DBHelperThuoc hoặc logging
+            DBHelperThuoc_Old.TABLE_THUOC_2KT,   // Là bảng initUrlTable
+            DBHelperThuoc_Old.TABLE_URLS_QUEUE_2KT,
             PrefKey.TOTAL_URLS_2KT,
             PrefKey.CRAWLED_URLSTART1_2KT_COUNT,
             PrefKey.SUM_CRAWLED_URLS_2KT_COUNT,
@@ -40,9 +33,9 @@ public enum CrawlType {
             "Phương pháp Crawl 3 Ký tự",
             "3kt", // <-- loai_thuoc DB value
             // Table Cha
-            DBHelperThuoc.TABLE_PARENT_URLS_3KT, // <-- Giữ lại tableName cũ
-            DBHelperThuoc.TABLE_THUOC_3KT,   // Là bảng initUrlTable
-            DBHelperThuoc.TABLE_URLS_QUEUE_3KT,
+            DBHelperThuoc_Old.TABLE_PARENT_URLS_3KT, // <-- Giữ lại tableName cũ
+            DBHelperThuoc_Old.TABLE_THUOC_3KT,   // Là bảng initUrlTable
+            DBHelperThuoc_Old.TABLE_URLS_QUEUE_3KT,
             PrefKey.TOTAL_URLS_3KT,
             PrefKey.CRAWLED_URLSTART1_3KT_COUNT,
             PrefKey.SUM_CRAWLED_URLS_3KT_COUNT,
@@ -57,9 +50,9 @@ public enum CrawlType {
             "Phương pháp Crawl Tùy chỉnh",
             "custom", // <-- loai_thuoc DB value
             // Table Cha
-            DBHelperThuoc.TABLE_PARENT_URLS_CUSTOM, // <-- Giữ lại tableName cũ
-            DBHelperThuoc.TABLE_THUOC_CUSTOM,   // Là bảng initUrlTable
-            DBHelperThuoc.TABLE_URLS_QUEUE_CUSTOM,
+            DBHelperThuoc_Old.TABLE_PARENT_URLS_CUSTOM, // <-- Giữ lại tableName cũ
+            DBHelperThuoc_Old.TABLE_THUOC_CUSTOM,   // Là bảng initUrlTable
+            DBHelperThuoc_Old.TABLE_URLS_QUEUE_CUSTOM,
             PrefKey.TOTAL_URLS_CUSTOM_STRING,
             PrefKey.CRAWLED_URLSTART1_CUSTOM_STRING_COUNT,
             PrefKey.SUM_CRAWLED_URLS_CUSTOM_STRING_COUNT,

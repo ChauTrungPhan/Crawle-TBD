@@ -2,13 +2,9 @@ package com.example.crawlertbdgemini2modibasicview;
 
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.widget.Toast;
-import android.widget.Toolbar;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,12 +35,22 @@ public class ExportProgressActivity extends AppCompatActivity {
         }
 
         CrawlType crawlType = new  SettingsRepository(this.getApplicationContext()).getSelectedCrawlType();
-        SQLiteDatabase db = DBHelperThuoc.getInstance(this.getApplicationContext()).getReadableDatabase();
-        //Cursor cursor = db.query(crawlType.getOldTableThuocName(), String[] {count(*)],)
-        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + crawlType.getTableThuocName(), null);
-        // Di chuyển con trỏ đến hàng đầu tiên chứa kết quả
-        cursor.moveToFirst();
-        toTalRecords = cursor.getLong(0);
+        SQLiteDatabase db = DBHelperThuoc_Old.getInstance(this.getApplicationContext()).getReadableDatabase();
+        /////
+//        //Cursor cursor = db.query(crawlType.getOldTableThuocName(), String[] {count(*)],)
+//        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + crawlType.getTableThuocName(), null);
+//        // Di chuyển con trỏ đến hàng đầu tiên chứa kết quả
+//        cursor.moveToFirst();
+//        toTalRecords = cursor.getLong(0);
+        /////
+
+        // Thay thế 3 dòng cũ bằng 1 dòng duy nhất bên dưới:
+        toTalRecords = android.database.DatabaseUtils.longForQuery(
+                db,
+                "SELECT COUNT(*) FROM " + crawlType.getTableThuocName(),
+                null
+        );
+
         exportViewModel = new ViewModelProvider(this).get(ExportViewModel.class);
         // Lấy dữ liệu intent truyền qua
         Intent intent = getIntent();
@@ -53,7 +59,7 @@ public class ExportProgressActivity extends AppCompatActivity {
         boolean isXmlExport = intent.getBooleanExtra(AppConstants.EXPORT_TYPE, false);
 
         // Bắt đầu export
-        exportViewModel.exportToExcel(isXmlExport, DBHelperThuoc.getInstance(this.getApplicationContext()),
+        exportViewModel.exportToExcel(isXmlExport, DBHelperThuoc_Old.getInstance(this.getApplicationContext()),
                 tableName, nameFileExcel);
 
         exportStartTime = System.currentTimeMillis();

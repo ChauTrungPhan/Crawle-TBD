@@ -9,9 +9,9 @@ import androidx.lifecycle.ViewModelProvider;
 
 public class CreateExcelViewModelFactory implements ViewModelProvider.Factory {
     private final Application application;
-    ExcelExporterOptimized_goc excelExporterOptimized;
+    private final ExcelExporterOptimized excelExporterOptimized;
 
-    public CreateExcelViewModelFactory(@NonNull Application application, ExcelExporterOptimized_goc excelExporterOptimized) {
+    public CreateExcelViewModelFactory(@NonNull Application application, ExcelExporterOptimized excelExporterOptimized) {
         this.application = application;
         this.excelExporterOptimized = excelExporterOptimized;
     }

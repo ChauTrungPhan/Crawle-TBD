@@ -1,45 +1,19 @@
 package com.example.crawlertbdgemini2modibasicview;
 //CỦA EXCEL PP MỚI
+
 import android.Manifest;
-import android.app.AlertDialog;
-//
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
-import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.graphics.Color;
-import android.graphics.ColorSpace;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.ColorInt;
-import androidx.annotation.ColorRes;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
-import androidx.core.view.WindowCompat;
-import androidx.lifecycle.LiveData;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.work.Data;
-import androidx.work.WorkInfo;
-
-
-import com.example.crawlertbdgemini2modibasicview.databinding.ActivityMainBinding;
-import com.example.crawlertbdgemini2modibasicview.utils.CrawlType;
-import com.example.crawlertbdgemini2modibasicview.utils.PrefKey;
-import com.example.crawlertbdgemini2modibasicview.utils.SettingsRepository;
-import com.example.crawlertbdgemini2modibasicview.utils.SharedPreferencesUtils;
-import com.example.crawlertbdgemini2modibasicview.utils.Utils;
-import com.google.android.material.appbar.MaterialToolbar;
-
 import android.os.Environment;
 import android.os.Handler;
 import android.provider.DocumentsContract;
@@ -54,16 +28,28 @@ import android.view.View;
 import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-//import org.apache.logging.log4j.LogManager;
-//import org.apache.logging.log4j.Logger;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+import androidx.core.view.WindowCompat;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.work.Data;
+import androidx.work.WorkInfo;
 
-import org.openxmlformats.schemas.officeDocument.x2006.sharedTypes.STHexColorRGB;
+import com.example.crawlertbdgemini2modibasicview.databinding.ActivityMainBinding;
+import com.example.crawlertbdgemini2modibasicview.utils.CrawlType;
+import com.example.crawlertbdgemini2modibasicview.utils.CrawlerRepository;
+import com.example.crawlertbdgemini2modibasicview.utils.SettingsRepository;
+import com.example.crawlertbdgemini2modibasicview.utils.SharedPreferencesUtils;
+import com.example.crawlertbdgemini2modibasicview.utils.Utils;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -71,8 +57,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -180,10 +164,11 @@ public class MainActivity extends AppCompatActivity {   // Mới
     private ActivityMainBinding binding; // View Binding instance
     //private MyViewModelCrawler_Gemini viewModelCrawlerGemini;
     private SettingsRepository settingsRepository;  //Thêm SettingsRepository
+    private CrawlerRepository crawlerRepository; // Khai báo biến
     private AppDatabase appDatabase;
     private WorkStateDao workStateDao;
 
-    private DBHelperThuoc dbHelperThuoc;
+    private DBHelperThuoc_Old dbHelperThuoc;
     //private SQLiteDatabase dbThuoc;
     private ExportViewModel exportViewModel; // Khai báo ExportViewModel
     ///
@@ -219,6 +204,8 @@ public class MainActivity extends AppCompatActivity {   // Mới
         // ... (ánh xạ các nút, ProgressBar, TextView status/progress khác): initViews()
         //initViews();    //trong onCreate()
         // 1. KHỞI TẠO CÁC ĐỐI TƯỢNG CẦN THIẾT
+        // Khởi tạo Repository
+        crawlerRepository = new CrawlerRepository(this);
         //ĐẦU TIÊN settingsRepository PHẢI CÓ ĐỂ TÍNH CÁC THÔNG SỐ KHÁC, SẼ LẤY ĐƯỢC CRAWLTYPE
         settingsRepository = new SettingsRepository(this);
         //PHẢI CÓ ĐỂ selectedCrawlType KHÔNG null
@@ -226,7 +213,7 @@ public class MainActivity extends AppCompatActivity {   // Mới
         appDatabase = AppDatabase.getInstance(this.getApplicationContext()); // Lấy thể hiện của Room Database
         workStateDao = appDatabase.workStateDao(); // Lấy DAO
 
-        dbHelperThuoc = DBHelperThuoc.getInstance(this.getApplicationContext());
+        dbHelperThuoc = DBHelperThuoc_Old.getInstance(this.getApplicationContext());
         //if (dbHelperThuoc.getCountErrorUrls(selectedCrawlType.getUrlQueueTableName()) > 0) {
         if (dbHelperThuoc.hasErrorUrls(selectedCrawlType)) {
             binding.tvSoUrlErrors.setVisibility(View.VISIBLE);
@@ -393,23 +380,24 @@ public class MainActivity extends AppCompatActivity {   // Mới
             // DÀNH CHO CÓ 2 CHỨC NĂNG
             if (isStartingOrStopping) { //isStartingOrStopping: chống double-click khi WorkManager chưa báo state mới.
                 Log.d(TAG, "Đang chuyển trạng thái, bỏ qua click");
-                return;
+                return; // Chống spam click
             }
 
             if (!isCrawling) {  // Dùng 1 nút btnCrawlData cho 2 chức năng : CRAWL+HỦY CRAWL
                 // Bấm Start
-                isCrawling = true;  // Đã có trong startCrawl
+                // Trạng thái: Chuẩn bị bắt đầu
+                //isCrawling = true;  // Đã có trong startCrawl
                 isStartingOrStopping = true;
-                binding.btnCrawlData.setText("Đang khởi động...");
                 binding.btnCrawlData.setEnabled(false); // TẠM THỜI
-
+                binding.btnCrawlData.setText("Đang khởi động...");
                 startCrawl();   // enqueue WorkManager
 
             } else {
                 // Bấm Dừng
+                // Trạng thái: Chuẩn bị dừng
                 isStartingOrStopping = true;
-                binding.btnCrawlData.setText("Đang dừng...");
                 binding.btnCrawlData.setEnabled(false); // TẠM THỜI
+                binding.btnCrawlData.setText("Đang dừng...");
 
                 stopCrawler();  // cancel WorkManager
 
@@ -1146,6 +1134,8 @@ private void confirmDeleteFile(File file) {
     }
 
     private void startCrawl() {
+        //writerEngine = new WriterEngine();
+        writerEngine = new WriterEngineChunked(selectedCrawlType, db, queue, 100); // chunk = 100
         startTime = System.currentTimeMillis();
 //        if (!viewModelCrawlerGemini.isWorkRunning()) {  // NẾU KHÔNG ĐANG CHẠY: CHỈ XAY RA KHI NHẤN LẦN 2,3N=.. LIÊN TIẾP
 
@@ -1496,7 +1486,7 @@ private void confirmDeleteFile(File file) {
     }
 
     private void resetDatabase(CrawlType crawlType) {
-        DBHelperThuoc dbHelper = DBHelperThuoc.getInstance(this);
+        DBHelperThuoc_Old dbHelper = DBHelperThuoc_Old.getInstance(this);
         //dbHelper.getDbPath();
         //FileUtils.deleteFileOrDirectory(new File(dbHelper.getDbPath())); //Delete file ThuocBietDuoc.db
         //SQLiteDatabase db = dbHelper.getWritableDatabase();
@@ -1621,362 +1611,78 @@ private void confirmDeleteFile(File file) {
             //Custom
         }
 
-        cancelledWorker = settingsRepository.getCancelledWorker(selectedCrawlType.getCancelledWorkerPrefKey());
         // Kiểm tra DB xem còn dữ liệu chưa xử lý không
-        List<UrlInfo> urlsToProcessQueue =
-                dbHelperThuoc.getDetailedUrlInfoByStatus(
-                        selectedCrawlType.getUrlQueueTableName(), 0
-                );
-        // hoặc
-//        Cursor c1 = dbHelperThuoc.getDb().query(selectedCrawlType.getUrlQueueTableName(), new String[]{DBHelperThuoc.PARENT_ID},
-//                DBHelperThuoc.STATUS + " = ?", new String[]{String.valueOf(0)},
-//                null, null, null);
-
-        // hoặc
-        Cursor c = dbHelperThuoc.getDb().rawQuery("SELECT COUNT(*) FROM " + selectedCrawlType.getUrlQueueTableName() +
-                " WHERE " + DBHelperThuoc.STATUS +"=?", new String[]{String.valueOf(0)});
-
-        //c.moveToFirst();    //Phải có
-        //if (urlsToProcessQueue != null && !urlsToProcessQueue.isEmpty()) {
-        if (c.moveToFirst() && c.getInt(0) > 0 && cancelledWorker) {
+        // Thay vì dùng Cursor thủ công hoặc load List, ta dùng longForQuery
+        long count = DatabaseUtils.longForQuery(
+                dbHelperThuoc.getReadableDatabase(),
+                "SELECT COUNT(*) FROM " + selectedCrawlType.getUrlQueueTableName() + " WHERE status = 0",
+                null
+        );
+        cancelledWorker = settingsRepository.getCancelledWorker(selectedCrawlType.getCancelledWorkerPrefKey());
+        // Điều kiện: Nếu có dữ liệu chưa xử lý VÀ công việc trước đó bị hủy (cancelledWorker)
+        if (count > 0 && cancelledWorker) {
             binding.btnCrawlData.setText("Tiếp tục Crawl");
             settingsRepository.saveCancelledWorker(selectedCrawlType.getCancelledWorkerPrefKey(), false);
         } else {
-            //binding.btnCrawlData.setText("Start Crawl");
+            binding.btnCrawlData.setText("Start Crawl");
         }
 
     }
 
 
     private void observeViewModel() {
-        // Vì dùng enqueueUniqueWork, nên KHÔNG CẦN QUAN TÂM workID khi khởi động app và worker tự chạy lại VẪN QUAN SÁT ĐƯỢC
         viewModelCrawlerGemini.getWorkInfoLiveData().observe(this, workInfos -> {
-            if (workInfos != null && !workInfos.isEmpty()) {
-                WorkInfo workInfo = workInfos.get(0);
-                Data progress = workInfo.getProgress();
-                // kIỂM TRA progress.getKeyValueMap():RỖNG THÌ KHÔNG LÀM:
-                // NÊN XEM LẠI, DÙ progress.getKeyValueMap() LÀ RỖNG, NGHIÃ LÀ CHƯA CÓ setProgressAsync,
-                // NHƯNG VẪN CHỨNG TỎ WORKER ĐANG HOẠT ĐỘNG: SỬ DỤNG ĐỂ SET CÁC NÚT: ENABLE HAY DISABLE
-//                if(progress.getKeyValueMap().isEmpty()) {
-//                    return;
-//                }
+            if (workInfos == null || workInfos.isEmpty()) {
+                return;
+            }
 
-                WorkInfo.State state = workInfo.getState();
-                Log.d(TAG, "STATE CHANGE: " + state);
+            // Hỗ trợ lấy WorkInfo cho cả các bản Android mới nhất (Vanilla Ice Cream) (hỗ trợ cả API mới và cũ)
+            WorkInfo workInfo = workInfos.get(0);
+            WorkInfo.State state = workInfo.getState();
 
-                String status = workInfo.getProgress().getString("status");
+            Log.d(TAG, "Worker State: " + state);
 
-                // Log khi state thay đổi
-                if (lastState == null || !lastState.equals(state)) {
-                    Log.d("STATE_TRACKER", "WorkInfo state changed: " + state.name());
-                    // Log toàn bộ thông tin WorkInfo
-                    Log.d(TAG, "🛠 WorkInfo: " + workInfo + " | thread=" + Thread.currentThread().getName());
-                    lastState = state;
-                }
+            // --- Cốt lõi: Reset trạng thái chặn click ---
+            // Khi WorkManager đã phản hồi trạng thái thực tế, ta cho phép người dùng click lại
+            // QUAN TRỌNG: Giải phóng chặn click ngay khi nhận được trạng thái mới từ hệ thống
+            isStartingOrStopping = false;
 
-                // --- Xử lý UI ---
-                // Log vòng đời đầy đủ
-                Log.d(TAG, "STATE CHANGE: " + state
-                        + " | finished=" + state.isFinished()
-                        + " | progressStatus=" + status);
+            switch (state) {
+                case ENQUEUED:
+                case RUNNING:
+                    isCrawling = true;
+                    binding.btnCrawlData.setEnabled(true);
+                    binding.btnCrawlData.setText("Dừng Crawl"); // Chế độ cho phép dừng
+                    toggleSettingsMenuItem(true); // Disable menu setting: Vô hiệu hóa menu cài đặt khi đang chạy
+                    break;
 
-                switch (state) {
-                    case ENQUEUED:
-                        if ("RETRY_NETWORK".equals(status)) {
-                            binding.tvCrawlerStatus.setText("Mạng bị mất. Đang thử lại...");
-                            // Tương thích tất cả API>=1
-                            binding.tvCrawlerStatus.setTextColor(ContextCompat.getColor(this.getApplicationContext(), R.color.md_theme_error));
-                        } else {
-                            binding.tvCrawlerStatus.setText("Đang đợi có mạng...");
-                            //binding.tvCrawlerStatus.setTextColor(getResources().getColor(R.color.md_theme_error));
-                            //binding.tvCrawlerStatus.setTextColor(getColor(R.color.md_theme_error));
-                            // Tương thích tất cả API>=1
-                            binding.tvCrawlerStatus.setTextColor(ContextCompat.getColor(this.getApplicationContext(), R.color.md_theme_error));
+                case SUCCEEDED:
+                case CANCELLED:
+                case FAILED:
+                    isCrawling = false;
+                    binding.btnCrawlData.setEnabled(true);
 
-                        }
-                        // Cho phép hủy khi ENQUEUED
-                        isCrawling = false;
-                        isStartingOrStopping = false;
-                        binding.btnCrawlData.setText("Dừng Crawl");   //Hủy chuẩn bị
-                        binding.btnCrawlData.setEnabled(true);
-                        break;
-                    case RUNNING:
-                        // SETUP THANH PROGRESS BAR: LUÔN LUÔN
-                        // VÌ URL có "start=1" c thể chạy trước các url phân trang, nên có thể đạt 100%
-                        // ngưng các thread chạy các url phân trang chư xong!
-                        // GIẢI PHÁP CHO MƯỢT: CH CHO ĐẠT 99%, CHỜ SUCCEEDED THÌ GÁN 100%
-                        int percent = progress.getInt(AppConstants.WORK_PROGRESS_PERCENT, 0);
-                        percent = Math.min(percent, 99);
-                        long currentProcessedCount = progress.getLong(selectedCrawlType.getCrawledUrlsCountPrefKey().name(), 0);
-                        long ProcessedUrlStar1Count = progress.getLong(selectedCrawlType.getCrawledUrlStart1sCountPrefKey().name(), 0);
-                        // HOẶC LẤY totalRecords = k1 - k0, VÌ k1, k0 là của phiên làm việc (của loại 2KT, hay 3KT, hay CUSTOM), không thay đổi
-                        int totalRecords = k1 - k0;  // Gán Biến toàn câu cho phiên làm việc. Đối với Java: kích thước int = long
-                        //long totalRecords = progress.getLong(selectedCrawlType.getTotalUrlsPrefKey().name(), 0);    // Lấy cách này: THỐNG NHẤT ĐỒNG BỘ, TRÁNH SAI
-
-                        // Hoặc
-                        //long totalRecords = settingsRepository.getTotalUrls(selectedCrawlType.getTotalUrlsPrefKey());
-                        // Hoaặc
-
-                        String urlCurrent = progress.getString(AppConstants.URL_CURRENT);
-                        // Thời gian có thể không cần truyền, MÀ LẤY TRỰC TIẾP TRÊN MAINACTIVITY
-                        //long elapsedTime = System.currentTimeMillis() - startTime;
-
-                        long elapsedTime = progress.getLong(AppConstants.WORK_ELAPSED_TIME, 0);   //milis Lấy từ progress
-                        long remainingTime = progress.getLong(AppConstants.WORK_REMAINING_TIME, 0); // milis Lấy từ progress
-
-                        // RẤT QUAN TRỌNG: Hãy đảm bảo bạn thấy log này với các giá trị đúng!
-                        Log.d("UI_OBSERVER", "Progress Data: Percent=" + percent + "%," +
-                                " Star1 Count=" + ProcessedUrlStar1Count + ", Total=" + totalRecords);
-                        Log.d(TAG, "updateProgressUI: percent=" + percent);
-                        Log.d(TAG, "updateProgressUI: TAO DAY=" + progress.getString("TaoDay"));
-
-                        /** // Cập nhật UI elements CHUNG CHO TRẠNG THÁI ĐANG CHẠY
-                         * Cập nhật ProgressBar và TextView trên Main Thread (LiveData tự động)
-                         * Đảm bảo yourProgressBar và yourTextView đã được khởi tạo và tham chiếu đúng
-                         * Update UI elements
-                         */
-
-                        // Thêm 1
-                        binding.tvSoUrlErrors.setText(String.valueOf(dbHelperThuoc.getCountErrorUrls(selectedCrawlType.getUrlQueueTableName())));
-                        //
-                        binding.progressPercentText.setText(percent + "%");
-                        binding.pbCrawlerProgress.setProgress(percent);
-                        //binding.tvCrawlerStatus.setText("Đang xử lý...");
-                        binding.tvSumProcessedUrls.setText(String.format("Tổng đã xử lý: %d", currentProcessedCount));
-                        binding.tvSoUrlTrenTotalUrl.setText(String.format("%d/%d", ProcessedUrlStar1Count, totalRecords));
-                        binding.tvInfoUrl.setText(urlCurrent);
-                        binding.tvElapsedTimes.setText(String.format("Thời gian trôi qua: %s", DateUtils.formatElapsedTime(elapsedTime/1000)));
-                        binding.tvTimeRemaining.setText(String.format("Thời gian còn lại: %s", DateUtils.formatElapsedTime(remainingTime/1000)));
-                        // Update thread monitoring
-                        //binding.tvThreadsWaiting.setText(String.format("Chờ: %d", threadsWaiting));
-                        //binding.tvNumThreadsActiveThreads.setText(String.format("Đang chạy: %d", activeThreads));
-                        //binding.tvNumThreadParallelism.setText(String.format("Số luồng tối đa: %d", threadsCompleted));
-                        //binding.tvNumThreadParallelism.setText(String.format("Số tác vụ hoàn thành: %d", completedTasks)); //Số tác vụ hoàn thành
-
-                        // threadsCompleted thường không chính xác cho việc hiển thị số luồng đang chạy
-                        // Bạn có thể không hiển thị threadsCompleted nếu nó không có ý nghĩa rõ ràng
-
-
-                        // 2 CHỨC NĂNG
-                        if (!isCrawling) { // Chỉ set một lần
-                            isCrawling = true;
-                            binding.tvCrawlerStatus.setText("Đang thu thập dữ liệu...");
-                            binding.tvCrawlerStatus.setTextColor(ContextCompat.getColor(this.getApplicationContext(), R.color.black));
-
-                            isStartingOrStopping = false;
-                            binding.btnCrawlData.setText("Dừng Crawl");
-                            binding.btnCrawlData.setEnabled(true);
-                            Log.d("STATE_TRACKER", "DEBUG_FLAG: RUNNING → updateUIState(true) (first time)");
-                            updateUIState(true); // disable các nút khác nếu cần
-                        } else {    //XEM
-                            Log.d("STATE_TRACKER", "DEBUG_FLAG: RUNNING → updateUIState(true) skipped (already set)");
-                        }
-                        // Bắt đầu đo thời gian nếu chưa
-                        if (crawlerStartTimeMillis == -1) {
-                            crawlerStartTimeMillis = System.currentTimeMillis();
-                            Log.d("STATE_TRACKER", "⏱ Crawler bắt đầu lúc: " + crawlerStartTimeMillis);
-                        }
-                        break;
-                    case SUCCEEDED:
-                        isCrawling = false;
-                        binding.tvCrawlerStatus.setText("Thu thập hoàn tất.");
-
-                        // Thêm: TẠI SAO urlsToProcessQueue STATUS = 0 VẪN CÒN?
-                        // Kiểm tra DB xem còn dữ liệu chưa xử lý không
-                        // Sau khi Worker kết thúc
-                        if (dbHelperThuoc.hasErrorUrls(selectedCrawlType)) {
-                            // Hiện nút "Xem lỗi"
-                            runOnUiThread(() -> {
-                                binding.btnViewErrors.setVisibility(View.VISIBLE);
-                                binding.tvSoUrlErrors.setText("Số View Errors: " + dbHelperThuoc.getCountErrorUrls(selectedCrawlType.getUrlQueueTableName()));
-                                binding.tvSoUrlErrors.setVisibility(View.VISIBLE);
-                                binding.btnCrawlData.setText("Tiếp tục Crawl");
-                            });
-                        } else {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    binding.progressPercentText.setText("100%");
-                                    binding.pbCrawlerProgress.setProgress(100);
-
-                                    binding.btnViewErrors.setVisibility(View.GONE);
-                                    binding.tvSoUrlErrors.setVisibility(View.GONE);
-                                    binding.btnCrawlData.setText("Start Crawl");
-                                }
-                            });
-                        }
-                        // Cách cũ
-//                        List<UrlInfo> urlsToProcessQueue =
-//                                dbHelperThuoc.getDetailedUrlInfoByStatus(
-//                                        selectedCrawlType.getUrlQueueTableName(), 0
-//                                );
-//
-//                        if (urlsToProcessQueue != null && !urlsToProcessQueue.isEmpty()) {
-//                            binding.btnCrawlData.setText("Tiếp tục Crawl");
-//                        } else {
-//                            binding.btnCrawlData.setText("Start Crawl");
-//                        }
-
-                        Toast.makeText(this, "Crawler đã hoàn thành!", Toast.LENGTH_SHORT).show();
-                        resetAfterFinish();
-                        break;
-                    case FAILED:
-                        isCrawling = false;
-                        binding.tvCrawlerStatus.setText("Crawler thất bại!");
+                    // Sử dụng Repository để quyết định text hiển thị trên nút
+                    // Kiểm tra lại DB để set Text cho nút
+                    if (crawlerRepository.hasPendingUrls(selectedCrawlType)) {
                         binding.btnCrawlData.setText("Tiếp tục Crawl");
-                        Toast.makeText(this, "Crawler thất bại!", Toast.LENGTH_SHORT).show();
-                        resetAfterFinish();
-                        break;
+                    } else {
+                        binding.btnCrawlData.setText("Bắt đầu Crawl");
+                    }
 
-                    case CANCELLED:
-                        isCrawling = false;
-                        cancelledWorker = true;
-                        settingsRepository.saveCancelledWorker(selectedCrawlType.getCancelledWorkerPrefKey(),true); // reset
+                    toggleSettingsMenuItem(false); // Mở lại menu setting
 
-                        // Kiểm tra DB xem còn dữ liệu chưa xử lý không
-                        //Mới
-                        if (dbHelperThuoc.hasErrorUrls(selectedCrawlType)) {
-                            // Hiện nút "Xem lỗi"
-                            runOnUiThread(() -> {
-                                binding.btnViewErrors.setVisibility(View.VISIBLE);
-                                binding.tvSoUrlErrors.setText("Số View Errors: " + dbHelperThuoc.getCountErrorUrls(selectedCrawlType.getUrlQueueTableName()));
-                                binding.tvSoUrlErrors.setVisibility(View.VISIBLE);
-                                binding.btnCrawlData.setText("Tiếp tục Crawl");
-                            });
-                        } else {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    binding.btnViewErrors.setVisibility(View.GONE);
-                                    binding.tvSoUrlErrors.setVisibility(View.GONE);
-                                    binding.btnCrawlData.setText("Start Crawl");
-                                }
-                            });
-                        }
-                        // Cũ
-//                        urlsToProcessQueue =
-//                                dbHelperThuoc.getDetailedUrlInfoByStatus(
-//                                        selectedCrawlType.getUrlQueueTableName(), 0
-//                                );
-//
-//                        if (urlsToProcessQueue != null && !urlsToProcessQueue.isEmpty()) {
-//                            binding.btnCrawlData.setText("Tiếp tục Crawl");
-//                        } else {
-//                            binding.btnCrawlData.setText("Start Crawl");
-//                        }
+                    if (state == WorkInfo.State.SUCCEEDED) {
+                        Toast.makeText(this, "Hoàn thành quá trình Crawl!", Toast.LENGTH_SHORT).show();
+                    } else if (state == WorkInfo.State.FAILED) {
+                        Toast.makeText(this, "Crawl thất bại, vui lòng kiểm tra lại.", Toast.LENGTH_SHORT).show();
+                    }
 
-                        binding.tvCrawlerStatus.setText("Crawl đã hủy!");
-                        Toast.makeText(this, "Crawler đã hủy!", Toast.LENGTH_SHORT).show();
-                        resetAfterFinish(); // Bỏ: VẪN CHE CÁC NÚT KHÁC, KHÔNG CHO CHỈ
-                        break;
-                } // END SWITCH
-
-                /// tẠM bỎ dÙNG ĐOẠN TRÊN tƯƠNG ĐƯƠNG
-//                if ("RETRY_NETWORK".equals(status)) {
-//                    binding.tvCrawlerStatus.setText("Mạng bị mất. Đang thử lại...");
-//                    //binding.tvCrawlerStatus.setTextColor(getResources().getColor(R.color.md_theme_error));
-//                    binding.tvCrawlerStatus.setTextColor(ContextCompat.getColor(this.getApplicationContext(), R.color.md_theme_error));
-//
-//                // ENQUEUED
-//                } else if (state == WorkInfo.State.ENQUEUED) {
-//                    // Đang chờ constraint (ví dụ mạng)
-//                    isCrawling = false; // chưa thực sự chạy
-//                    isStartingOrStopping = false;
-//                    isUIRunningStateSet = false; // reset flag
-//                    Log.d("STATE_TRACKER", "DEBUG_FLAG: Reset RUNNING flag (ENQUEUED)");
-//                    binding.btnCrawlData.setText("Hủy chuẩn bị");
-//                    binding.btnCrawlData.setEnabled(true);
-//                    // Tùy chọn: updateUIState(true);
-//
-//                    binding.tvCrawlerStatus.setText("Đang đợi có mạng...");
-//                    //binding.tvCrawlerStatus.setTextColor(getResources().getColor(R.color.md_theme_error));
-//                      binding.tvCrawlerStatus.setTextColor(ContextCompat.getColor(this.getApplicationContext(), R.color.md_theme_error));
-//                    if (DISABLE_BUTTONS_WHEN_ENQUEUED) {
-//                        updateUIState(true);    // Tùy chọn: updateUIState(true);
-//                    }
-//
-//
-//
-//                // RUNNING
-//                } else if (state == WorkInfo.State.RUNNING) { // ====== RUNNING: cập nhật tiến độ ======
-//                    binding.tvCrawlerStatus.setText("Đang thu thập dữ liệu...");
-//                    binding.tvCrawlerStatus.setTextColor(getResources().getColor(R.color.black));
-//                    //binding.tvCrawlerStatus.setTextColor(getColor(ColorRes, 1));
-//                    // Bắt đầu đo thời gian nếu chưa
-//                    if (crawlerStartTimeMillis == -1) {
-//                        crawlerStartTimeMillis = System.currentTimeMillis();
-//                        Log.d("STATE_TRACKER", "⏱ Crawler bắt đầu lúc: " + crawlerStartTimeMillis);
-//                    }
-//                    // 2 CHỨC NĂNG
-//                    isCrawling = true;
-//                    isStartingOrStopping = false;   //isUIRunningStateSet cÓ VẺ GIỐNG isStartingOrStopping
-//                    binding.btnCrawlData.setText("Dừng Crawl");
-//                    binding.btnCrawlData.setEnabled(true);
-//                    //
-//                    // Chỉ update UI disable nút 1 lần
-//                    if (!isUIRunningStateSet) { //isUIRunningStateSet cÓ VẺ GIỐNG isStartingOrStopping
-//                        Log.d("STATE_TRACKER", "DEBUG_FLAG: RUNNING → updateUIState(true) (first time)");
-//                        updateUIState(true); // disable các nút khác nếu cần
-//                        isUIRunningStateSet = true;
-//                    } else {
-//                        Log.d("STATE_TRACKER", "DEBUG_FLAG: RUNNING → updateUIState(true) skipped (already set)");
-//                    }
-//
-//                } else if (state.isFinished()) {
-//                    // 2 CHỨC NĂNG
-//                    isCrawling = false;
-//                    //isStartingOrStopping chống double-click khi WorkManager chưa báo state mới.
-//                    isStartingOrStopping = false;   //isUIRunningStateSet cÓ VẺ GIỐNG isStartingOrStopping
-//                    binding.btnCrawlData.setText("Start Crawl");
-//                    binding.btnCrawlData.setEnabled(true);
-//                    updateUIState(false);
-//                    //
-//                    // Reset flag
-//                    isUIRunningStateSet = false;    //isUIRunningStateSet cÓ VẺ GIỐNG isStartingOrStopping
-//                    Log.d("STATE_TRACKER", "DEBUG_FLAG: Reset RUNNING flag (FINISHED)");
-//                    // Tính thời gian chạy
-//                    if (crawlerStartTimeMillis != -1) {
-//                        long durationMillis = System.currentTimeMillis() - crawlerStartTimeMillis;
-//                        double durationSeconds = durationMillis / 1000.0;
-//                        Log.d("STATE_TRACKER", "⏱ Crawler hoàn tất. Thời gian chạy: " + durationSeconds + " giây");
-//                        binding.tvCrawlerStatus.append("\nThời gian: " + durationSeconds + " giây");
-//                        crawlerStartTimeMillis = -1;
-//                    }
-//
-//                    // Các trạng thái kết thúc
-//                    if (state == WorkInfo.State.SUCCEEDED) {
-//                        binding.tvCrawlerStatus.setText("Thu thập hoàn tất.");
-//                        binding.btnCrawlData.setText("Start Crawl");
-//                        isCrawling = false;
-//                        Toast.makeText(this, "Crawler đã hoàn thành!", Toast.LENGTH_SHORT).show();
-//
-//                    } else if (state == WorkInfo.State.CANCELLED) {
-//                        binding.tvCrawlerStatus.setText("Crawl đã hủy!");
-//                        binding.btnCrawlData.setText("Tiếp tục Crawl");
-//                        isCrawling = false;
-//                        Toast.makeText(this, "Crawler đã hủy!", Toast.LENGTH_SHORT).show();
-//
-//                    } else { // FAILED
-//                        binding.tvCrawlerStatus.setText("Crawler thất bại!");
-//                        binding.btnCrawlData.setText("Start Crawl");
-//                        String message = workInfo.getOutputData().getString("message");
-//                        Toast.makeText(this, "Crawler thất bại: " + message, Toast.LENGTH_SHORT).show();
-//                    }
-//
-//                    // Enable buttons sau khi xong
-//                    updateUIState(false);
-//                }
-
-            } else {
-                // Không có công việc nào
-                // 2 CHỨC NĂNG
-                isCrawling = false;
-                isStartingOrStopping = false;
-                binding.btnCrawlData.setText("Start Crawl");
-                binding.btnCrawlData.setEnabled(true);
-                //
-                binding.tvCrawlerStatus.setText("Sẵn sàng bắt đầu thu thập.");
-                updateUIState(false);
+                    break;
+                case BLOCKED:
+                    binding.btnCrawlData.setText("Đang chờ...");
+                    binding.btnCrawlData.setEnabled(false);
+                    break;
             }
         });
     }

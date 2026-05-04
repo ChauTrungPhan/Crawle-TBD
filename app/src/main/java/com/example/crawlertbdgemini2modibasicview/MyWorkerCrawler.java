@@ -26,7 +26,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
-import androidx.navigation.internal.AtomicInt;
 import androidx.work.Data;
 import androidx.work.ForegroundInfo;
 import androidx.work.Worker;
@@ -37,7 +36,6 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import com.example.crawlertbdgemini2modibasicview.utils.CrawlType; // Import CrawlType
-import com.example.crawlertbdgemini2modibasicview.utils.PrefKey; // Import PrefKey
 import com.example.crawlertbdgemini2modibasicview.utils.SettingsRepository; // Import SettingsRepository
 
 import org.apache.logging.log4j.LogManager;
@@ -59,7 +57,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 import java.io.File;
@@ -74,7 +71,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RecursiveAction;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -89,7 +85,7 @@ public class MyWorkerCrawler extends Worker {
     AtomicInteger numPacket = new AtomicInteger(0);
     //END XEM
     private static final Logger log = LogManager.getLogger(MyWorkerCrawler.class);
-    private final DBHelperThuoc dbHelperThuoc; // Giữ tham chiếu đến Singleton DBHelperThuoc
+    private final DBHelperThuoc_Old dbHelperThuoc; // Giữ tham chiếu đến Singleton DBHelperThuoc
     private static final int NOTIFICATION_ID = 1001;
     private final ConcurrentSkipListSet<String> visitedUrls; // Sử dụng ConcurrentSkipListSet:  URLs đã ghé thăm (bao gồm cả đang xử lý và đã hoàn thành)
     private final ConcurrentSkipListSet<String> completedUrlsChild; // URLs con đã hoàn thành
@@ -133,7 +129,7 @@ public class MyWorkerCrawler extends Worker {
         // Cập nhật MyWorkerCrawler (Sử dụng CrawlType và SettingsRepository)
         // Mới
         // Lấy thể hiện Singleton của DBHelperThuoc
-        this.dbHelperThuoc = DBHelperThuoc.getInstance(context);
+        this.dbHelperThuoc = DBHelperThuoc_Old.getInstance(context);
         // XÓA DÒNG NÀY: Không cần lấy dbThuoc ở đây và giữ tham chiếu lâu dài
         // this.dbThuoc = dbHelperThuoc.getWritableDatabase();  // LOẠI BỎ DÒNG NÀY!
 
@@ -765,7 +761,7 @@ public class MyWorkerCrawler extends Worker {
         //Tạm bỏ
 
         public List<ThuocSQLite>  crawlUrl(String url, long parentId, int level, ConcurrentSkipListSet<String> crawledUrlChilds,
-                                           AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc) throws IOException {
+                                           AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc_Old dbHelperThuoc) throws IOException {
             /* Mục đích:
                 * 1/ Cào dữ liệu thuốc từ url
                 * 2/ Đãnh dấu url đã cào vào vào bảng URL_QUEUE với STATUS=1
@@ -1143,7 +1139,7 @@ public class MyWorkerCrawler extends Worker {
 
         // Theo pp: CHA-CON(Parent-child)
         public Packet crawlUrlParentChild(UrlInfo urlInfo, long parentId, int level, ConcurrentSkipListSet<String> crawledUrlChilds,
-                                                     AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc) throws UnknownHostException { //throws IOException
+                                                     AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc_Old dbHelperThuoc) throws UnknownHostException { //throws IOException
             /* Mục đích:
              * 1/ Cào dữ liệu thuốc từ url
              * 2/ Đãnh dấu url đã cào vào vào bảng URL_QUEUE với STATUS=1
@@ -1675,8 +1671,8 @@ public class MyWorkerCrawler extends Worker {
 
             // Ghi URL vào bảng initUrlsTable
             ContentValues values = new ContentValues();
-            values.put(DBHelperThuoc.PARENT_ID, parentId);
-            values.put(DBHelperThuoc.LEVEL, 1); //Cũ: Của url cha level = 0 (Mặc định); Mới: level (thành page) = 1 (Mặc định)
+            values.put(DBHelperThuoc_Old.PARENT_ID, parentId);
+            values.put(DBHelperThuoc_Old.LEVEL, 1); //Cũ: Của url cha level = 0 (Mặc định); Mới: level (thành page) = 1 (Mặc định)
             values.put("url", (url0 + kytu + url1).trim());
             values.put("status", 0); // 0: chưa xử lý, có thể thêm cột 'completed' nếu cần. Mặc định completed = 0 (uncompleted)
             dbThuoc.insertWithOnConflict( initUrlsTable, null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
@@ -1699,7 +1695,7 @@ public class MyWorkerCrawler extends Worker {
     // Các phương thức crawlChildPages vẫn giữ nguyên, có thể cần xem xét lại logic
     // tùy thuộc vào yêu cầu cụ thể về việc crawl trang con.
     private void crawlChildPagesSingle(String urlCha, Document doc, int parentId, int level, ConcurrentSkipListSet<String> crawledUrlChilds,
-                                 AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc, CrawlRuntime runtime) {
+                                       AtomicLong crawledUrlStar1Count, DBHelperThuoc_Old dbHelperThuoc, CrawlRuntime runtime) {
         if (doc == null) {
             return;        //return Collections.emptyList();
         }
@@ -1744,7 +1740,7 @@ public class MyWorkerCrawler extends Worker {
                                  int level,
                                  ConcurrentSkipListSet<String> crawledUrlChilds,
                                  AtomicLong crawledUrlStar1Count,
-                                 DBHelperThuoc dbHelperThuoc,
+                                 DBHelperThuoc_Old dbHelperThuoc,
                                  CrawlRuntime runtime) {
 
         Log.d(TAG, "crawlChildPages: urlCha=" + urlCha + " level=" + level);
@@ -1922,9 +1918,9 @@ public class MyWorkerCrawler extends Worker {
 
         private final Thread monitorThread;
         //private final Thread writerThread;
-        public CrawlRuntime(Context ctx) {
+        public CrawlRuntime(Context context) {
 
-            DBHelperThuoc helper = DBHelperThuoc.getInstance(ctx);
+            DBHelperThuoc_Old helper = DBHelperThuoc_Old.getInstance(context.getApplicationContext());
             db = helper.getWritableDatabase();    //Gốc
 //            db = helper.getDb();  //Singleton
             // Cũ

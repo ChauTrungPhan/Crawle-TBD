@@ -12,7 +12,8 @@ plugins {
 
 android {
     namespace 'com.example.crawlertbdgemini2modibasicview'
-    compileSdk 36
+    // Đảm bảo dùng cú pháp mới nhất
+    compileSdk = 35
 
     defaultConfig {
         applicationId "com.example.crawlertbdgemini2modibasicview"
@@ -30,6 +31,9 @@ android {
         // Thêm dòng này nếu bạn gặp lỗi dex count limit (có thể xảy ra với nhiều thư viện)
         multiDexEnabled true
     }
+
+    // Thêm dòng này để ép IDE dùng Build Tools ổn định như mình đã bàn
+    buildToolsVersion = "35.0.0"    //35.0.0
 
     buildTypes {
         release {
@@ -99,44 +103,10 @@ dependencies {
 
     // Apache Commons Text: Thư viện xử lý văn bản
     implementation libs.commons.text
-
-    // Apache POI for Excel export
-    //implementation 'org.apache.poi:poi-ooxml:5.3.0'
-    //implementation libs.poi // Base POI library
-    //implementation "org.apache.poi:poi:5.4.0"
-    implementation libs.poi
-    implementation libs.poi.ooxml
-
-//    implementation (org.apache.poi:poi-ooxml:5.3.0) {
-//        // Loại trừ xml-apis để tránh xung đột với các lớp XML của Android nếu có
-//        exclude group: 'xml-apis', module: 'xml-apis'
-//    }
-    // THÊM CÁC PHỤ THUỘC BỊ THIẾU MỘT CÁCH RÕ RÀNG cho POI-OOXML
-    // Apache XMLBeans - CẦN THIẾT cho poi-ooxml
     implementation libs.xmlbeans
 
     // Apache Commons Collections4 - CẦN THIẾT cho một số chức năng của POI
     implementation libs.commons.collections4
-
-    // CurvesAPI - CẦN THIẾT cho một số hình dạng và đối tượng đồ họa trong OOXML
-    implementation libs.curvesapi
-
-    // JDOM2: Một thư viện XML khác
-    implementation libs.jdom2
-
-    /////////////////////////
-//    implementation 'com.github.pablo67340:apache-poi-android:4.1.2' // Hoặc phiên bản mới nhất bạn tìm thấy
-//    // Nếu bạn đang dùng các phiên bản poi khác như ooxml, xoorg, có thể cần thêm các bản tương ứng
-//    // Ví dụ:
-//     implementation 'com.github.pablo67340:poi-ooxml-android:4.1.2'
-//    implementation "com.github.SUPERCILEX.poi-android:poi:$poiVersion"
-//    implementation "com.github.SUPERCILEX.poi-android:poi:4.1.2"  //5.3.0; 5.4.0
-//    implementation libs.poi  //5.3.0; 5.4.0
-//    implementation "com.github.SUPERCILEX.poi-android:ooxml:5.3.0"
-
-    //implementation 'org.apache.poi:poi-ooxml:5.3.0'
-
-
     // Android Core utilities
     //implementation libs.core
     implementation "androidx.core:core:1.16.0" // hoặc phiên bản mới nhất

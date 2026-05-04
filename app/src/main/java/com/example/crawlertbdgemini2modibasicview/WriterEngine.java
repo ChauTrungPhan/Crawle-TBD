@@ -71,29 +71,29 @@ public class WriterEngine {
                             //cv.put(DBHelperThuoc.PARENT_ID, thuoc.parent_id);
                             //cv.put(DBHelperThuoc.LEVEL, thuoc.level);
                             //cv.put(DBHelperThuoc.KY_TU_SEARCH, thuoc.ky_tu_search);
-                            cv.put(DBHelperThuoc.MA_THUOC, thuoc.ma_thuoc);
-                            cv.put(DBHelperThuoc.MA_THUOC_LINK, thuoc.ma_thuoc_link);
-                            cv.put(DBHelperThuoc.TEN_THUOC, thuoc.ten_thuoc);
-                            cv.put(DBHelperThuoc.THANH_PHAN, thuoc.thanh_phan);
-                            cv.put(DBHelperThuoc.THANH_PHAN_LINK, thuoc.thanh_phan_link);
-                            cv.put(DBHelperThuoc.NHOM_THUOC, thuoc.nhom_thuoc);
-                            cv.put(DBHelperThuoc.NHOM_THUOC_LINK, thuoc.nhom_thuoc_link);
-                            cv.put(DBHelperThuoc.DANG_THUOC, thuoc.dang_thuoc);
-                            cv.put(DBHelperThuoc.DANG_THUOC_LINK, thuoc.dang_thuoc_link);
-                            cv.put(DBHelperThuoc.SAN_XUAT, thuoc.san_xuat);
-                            cv.put(DBHelperThuoc.SAN_XUAT_LINK, thuoc.san_xuat_link);
-                            cv.put(DBHelperThuoc.DANG_KY, thuoc.dang_ky);
-                            cv.put(DBHelperThuoc.DANG_KY_LINK, thuoc.dang_ky_link);
-                            cv.put(DBHelperThuoc.PHAN_PHOI, thuoc.phan_phoi);
-                            cv.put(DBHelperThuoc.PHAN_PHOI_LINK, thuoc.phan_phoi_link);
-                            cv.put(DBHelperThuoc.SDK, thuoc.sdk);
-                            cv.put(DBHelperThuoc.SDK_LINK, thuoc.sdk_link);
-                            cv.put(DBHelperThuoc.CAC_THUOC, thuoc.cac_thuoc);
-                            cv.put(DBHelperThuoc.CAC_THUOC_LINK, thuoc.cac_thuoc_link);
+                            cv.put(DBHelperThuoc_Old.MA_THUOC, thuoc.ma_thuoc);
+                            cv.put(DBHelperThuoc_Old.MA_THUOC_LINK, thuoc.ma_thuoc_link);
+                            cv.put(DBHelperThuoc_Old.TEN_THUOC, thuoc.ten_thuoc);
+                            cv.put(DBHelperThuoc_Old.THANH_PHAN, thuoc.thanh_phan);
+                            cv.put(DBHelperThuoc_Old.THANH_PHAN_LINK, thuoc.thanh_phan_link);
+                            cv.put(DBHelperThuoc_Old.NHOM_THUOC, thuoc.nhom_thuoc);
+                            cv.put(DBHelperThuoc_Old.NHOM_THUOC_LINK, thuoc.nhom_thuoc_link);
+                            cv.put(DBHelperThuoc_Old.DANG_THUOC, thuoc.dang_thuoc);
+                            cv.put(DBHelperThuoc_Old.DANG_THUOC_LINK, thuoc.dang_thuoc_link);
+                            cv.put(DBHelperThuoc_Old.SAN_XUAT, thuoc.san_xuat);
+                            cv.put(DBHelperThuoc_Old.SAN_XUAT_LINK, thuoc.san_xuat_link);
+                            cv.put(DBHelperThuoc_Old.DANG_KY, thuoc.dang_ky);
+                            cv.put(DBHelperThuoc_Old.DANG_KY_LINK, thuoc.dang_ky_link);
+                            cv.put(DBHelperThuoc_Old.PHAN_PHOI, thuoc.phan_phoi);
+                            cv.put(DBHelperThuoc_Old.PHAN_PHOI_LINK, thuoc.phan_phoi_link);
+                            cv.put(DBHelperThuoc_Old.SDK, thuoc.sdk);
+                            cv.put(DBHelperThuoc_Old.SDK_LINK, thuoc.sdk_link);
+                            cv.put(DBHelperThuoc_Old.CAC_THUOC, thuoc.cac_thuoc);
+                            cv.put(DBHelperThuoc_Old.CAC_THUOC_LINK, thuoc.cac_thuoc_link);
                             //cv.put(DBHelperThuoc.URL, thuoc.url);
                             //cv.put(DBHelperThuoc.GHI_CHU, thuoc.ghi_chu);
                             //cv.put(DBHelperThuoc.INDEX_COLOR, thuoc.index_color);
-                            cv.put(DBHelperThuoc.CREATED_AT, thuoc.updatedAt);   //Cột thứ 26 (index=25)
+                            cv.put(DBHelperThuoc_Old.CREATED_AT, thuoc.updatedAt);   //Cột thứ 26 (index=25)
 
 //                        if (!isMaThuocExists(thuoc.ma_thuoc)) {
 //                            db.insert(tableThuoc, null, cv);
@@ -108,7 +108,7 @@ public class WriterEngine {
                             }
 
                             // code KHÔNG CẦN KIỂM TRA MÃ THUỐC ĐÃ CÓ
-                            long affectedRows = db.update(tableThuoc, cv, DBHelperThuoc.MA_THUOC + "=?", new String[]{thuoc.ma_thuoc});
+                            long affectedRows = db.update(tableThuoc, cv, DBHelperThuoc_Old.MA_THUOC + "=?", new String[]{thuoc.ma_thuoc});
                             if (affectedRows == 0) {
                                 db.insert(tableThuoc, null, cv);
                             }
@@ -140,7 +140,7 @@ public class WriterEngine {
 
     private boolean isMaThuocExists(String maThuoc) {
         try (Cursor c = db.rawQuery(
-                "SELECT 1 FROM " + tableThuoc + " WHERE " + DBHelperThuoc.MA_THUOC + "=? LIMIT 1",
+                "SELECT 1 FROM " + tableThuoc + " WHERE " + DBHelperThuoc_Old.MA_THUOC + "=? LIMIT 1",
                 new String[]{maThuoc})) {
             return c.moveToFirst();
         }

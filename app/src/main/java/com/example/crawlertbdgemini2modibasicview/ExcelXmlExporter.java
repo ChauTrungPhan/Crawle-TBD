@@ -32,7 +32,7 @@ public class ExcelXmlExporter {
     private static final Logger log = LogManager.getLogger(ExcelXmlExporter.class);
 
     public static void exportMultiThread(Context context, ExcelExporterOptimized_goc.ExportCallbacks callbacks) {
-        SQLiteDatabase db = DBHelperThuoc.getInstance(context).getReadableDatabase();
+        SQLiteDatabase db = DBHelperThuoc_Old.getInstance(context).getReadableDatabase();
         CrawlType crawlType = new SettingsRepository(context).getSelectedCrawlType();
         String tableName = crawlType.getTableThuocName();
 
@@ -83,7 +83,7 @@ public class ExcelXmlExporter {
 
     private static void exportXmlPart(Context context, String table, int index, int offset, int limit, List<File> outFiles) throws Exception {
         Log.d(TAG, "exportXmlPart: Danh sách outFiles" + outFiles.toString());
-        SQLiteDatabase db = DBHelperThuoc.getInstance(context).getReadableDatabase();
+        SQLiteDatabase db = DBHelperThuoc_Old.getInstance(context).getReadableDatabase();
         String query = buildQuery(table) + " LIMIT " + limit + " OFFSET " + offset;
         Cursor cursor = db.rawQuery(query, null);
 
@@ -97,10 +97,10 @@ public class ExcelXmlExporter {
         while (cursor.moveToNext()) {
             // Mỗi vòng lặp sẽ Ghi 1 hàng excel
             sb.append("<Row Color=\"")
-                    .append(cursor.getInt(cursor.getColumnIndexOrThrow(DBHelperThuoc.INDEX_COLOR)))
+                    .append(cursor.getInt(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.INDEX_COLOR)))
                     .append("\">\n");
             // Lặp cột, ghi giá trị cột cho 1 hàng
-            for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+            for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
                 String val = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
                 // Bỏ giá tri: "#HangDau"
                 if(val.equalsIgnoreCase("#HangDau")){
@@ -165,12 +165,12 @@ public class ExcelXmlExporter {
 
     private static String buildQuery(String tableName) {
         StringBuilder sb = new StringBuilder();
-        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
             sb.append(col.dbColumnName).append(", ");
             if (col.dbLinkColumnName != null)
                 sb.append(col.dbLinkColumnName).append(", ");
         }
-        sb.append(DBHelperThuoc.INDEX_COLOR);
+        sb.append(DBHelperThuoc_Old.INDEX_COLOR);
         return "SELECT " + sb.toString().replaceAll(", $", "") + " FROM " + tableName;
     }
 }
