@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.util.Log;
 
 import com.example.crawlertbdgemini2modibasicview.utils.CrawlType;
+import com.example.crawlertbdgemini2modibasicview.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,16 +51,16 @@ public class WriterEngineChunked extends Thread {
         tableThuoc = crawlType.getTableThuocName();
         tableUrlsQueue = crawlType.getUrlQueueTableName();
         if (crawlType.getSettingIdName().toLowerCase().endsWith("2kt")) {
-            tableParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_2KT;
+            tableParent = DBHelperThuoc.TABLE_PARENT_URLS_2KT;
             //tableThuoc = DBHelperThuoc.TABLE_THUOC_2KT;
             //tableUrlsQueue = DBHelperThuoc.TABLE_URLS_QUEUE_2KT;
 
         } else if (crawlType.getSettingIdName().toLowerCase().endsWith("3kt")) {
-            tableParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_3KT;
+            tableParent = DBHelperThuoc.TABLE_PARENT_URLS_3KT;
 //            tableThuoc = DBHelperThuoc.TABLE_THUOC_3KT;
 //            tableUrlsQueue = DBHelperThuoc.TABLE_URLS_QUEUE_3KT;
         } else {
-            tableParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_CUSTOM;
+            tableParent = DBHelperThuoc.TABLE_PARENT_URLS_CUSTOM;
 //            tableThuoc = DBHelperThuoc.TABLE_THUOC_CUSTOM;
 //            tableUrlsQueue = DBHelperThuoc.TABLE_URLS_QUEUE_CUSTOM;
         }
@@ -68,19 +69,19 @@ public class WriterEngineChunked extends Thread {
         // Insert vào bản cha: 7 cột
         String sqlUpsertUrlParent =
                 "INSERT INTO " + tableParent+"(" +
-                        DBHelperThuoc_Old.PARENT_ID + ", " +
-                        DBHelperThuoc_Old.LEVEL + ", " +
+                        DBHelperThuoc.ID_URL + ", " +
+                        DBHelperThuoc.LEVEL + ", " +
                         //DBHelperThuoc.KY_TU_SEARCH + "," +  // Cần Không, chỉ là giá tr trung gian của url
 
-                        DBHelperThuoc_Old.URL + ", " +  // link, Hyperlink: sẽ lấy được KY_TU_SEARCH
+                        DBHelperThuoc.URL + ", " +  // link, Hyperlink: sẽ lấy được KY_TU_SEARCH
 
-                        DBHelperThuoc_Old.MA_THUOC + ", " +
-                        DBHelperThuoc_Old.STATUS + ", " +
-                        DBHelperThuoc_Old.GHI_CHU + ", " +
-                        DBHelperThuoc_Old.INDEX_COLOR + ", " +
+                        DBHelperThuoc.MA_THUOC + ", " +
+                        DBHelperThuoc.STATUS + ", " +
+                        DBHelperThuoc.GHI_CHU + ", " +
+                        DBHelperThuoc.INDEX_COLOR + ", " +
 
-                        DBHelperThuoc_Old.CREATED_AT + ", " +   // Khi insert
-                        DBHelperThuoc_Old.LAST_UPDATED + ") " +
+                        DBHelperThuoc.CREATED_AT + ", " +   // Khi insert
+                        DBHelperThuoc.LAST_UPDATED + ") " +
                         "VALUES (" +
                         "?, ?, " +
                         "?, " +
@@ -90,53 +91,53 @@ public class WriterEngineChunked extends Thread {
                         //DBHelperThuoc.PARENT_ID + " = excluded." + DBHelperThuoc.PARENT_ID + ", " +
                         //DBHelperThuoc.LEVEL + " = excluded." + DBHelperThuoc.LEVEL + ", " +
 
-                        DBHelperThuoc_Old.MA_THUOC + " = excluded." + DBHelperThuoc_Old.MA_THUOC + ", " +
-                        DBHelperThuoc_Old.STATUS + " = excluded." + DBHelperThuoc_Old.STATUS + ", " +
-                        DBHelperThuoc_Old.GHI_CHU + " = excluded." + DBHelperThuoc_Old.GHI_CHU + ", " +
-                        DBHelperThuoc_Old.INDEX_COLOR + " = excluded." + DBHelperThuoc_Old.INDEX_COLOR + ", " +
-                        DBHelperThuoc_Old.LAST_UPDATED + " = excluded." + DBHelperThuoc_Old.LAST_UPDATED ;  // Dành cho update, giữ nguyên CREATED_AT
+                        DBHelperThuoc.MA_THUOC + " = excluded." + DBHelperThuoc.MA_THUOC + ", " +
+                        DBHelperThuoc.STATUS + " = excluded." + DBHelperThuoc.STATUS + ", " +
+                        DBHelperThuoc.GHI_CHU + " = excluded." + DBHelperThuoc.GHI_CHU + ", " +
+                        DBHelperThuoc.INDEX_COLOR + " = excluded." + DBHelperThuoc.INDEX_COLOR + ", " +
+                        DBHelperThuoc.LAST_UPDATED + " = excluded." + DBHelperThuoc.LAST_UPDATED ;  // Dành cho update, giữ nguyên CREATED_AT
 
         stmtUpsertUrlParent = db.compileStatement(sqlUpsertUrlParent);
 
         stmtSelectUrlId = db.compileStatement(
-                "SELECT " + DBHelperThuoc_Old.ID + " FROM " + tableParent + " WHERE url = ?");
+                "SELECT " + DBHelperThuoc.ID + " FROM " + tableParent + " WHERE url = ?");
 
         // Bảng con: Thuoc UPSERT: cập nhật các trường khi trùng (url_Id, ma_thuoc): ThuocSQLITE: có 26 cột, bảng con có 27 cột
         String sqlUpsertThuocChild = "INSERT INTO " + tableThuoc + " (" +
-                DBHelperThuoc_Old.URL_ID + ", " +
+                DBHelperThuoc.ID_URL + ", " +
 
 //                DBHelperThuoc.PARENT_ID + ", " +
 //                DBHelperThuoc.LEVEL + ", " +
 //                DBHelperThuoc.KY_TU_SEARCH + ", " +
 
-                DBHelperThuoc_Old.MA_THUOC + ", " +
+                DBHelperThuoc.MA_THUOC + ", " +
 
-                DBHelperThuoc_Old.MA_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.TEN_THUOC + ", " +
-                DBHelperThuoc_Old.THANH_PHAN + ", " +
-                DBHelperThuoc_Old.THANH_PHAN_LINK + ", " +
-                DBHelperThuoc_Old.NHOM_THUOC + ", " +
+                DBHelperThuoc.MA_THUOC_LINK + ", " +
+                DBHelperThuoc.TEN_THUOC + ", " +
+                DBHelperThuoc.THANH_PHAN + ", " +
+                DBHelperThuoc.THANH_PHAN_LINK + ", " +
+                DBHelperThuoc.NHOM_THUOC + ", " +
 
-                DBHelperThuoc_Old.NHOM_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.DANG_THUOC + ", " +
-                DBHelperThuoc_Old.DANG_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.SAN_XUAT + ", " +
-                DBHelperThuoc_Old.SAN_XUAT_LINK + ", " +
+                DBHelperThuoc.NHOM_THUOC_LINK + ", " +
+                DBHelperThuoc.DANG_THUOC + ", " +
+                DBHelperThuoc.DANG_THUOC_LINK + ", " +
+                DBHelperThuoc.SAN_XUAT + ", " +
+                DBHelperThuoc.SAN_XUAT_LINK + ", " +
 
-                DBHelperThuoc_Old.DANG_KY + ", " +
-                DBHelperThuoc_Old.DANG_KY_LINK + ", " +
-                DBHelperThuoc_Old.PHAN_PHOI + ", " +
-                DBHelperThuoc_Old.PHAN_PHOI_LINK + ", " +
-                DBHelperThuoc_Old.SDK + ", " +
+                DBHelperThuoc.DANG_KY + ", " +
+                DBHelperThuoc.DANG_KY_LINK + ", " +
+                DBHelperThuoc.PHAN_PHOI + ", " +
+                DBHelperThuoc.PHAN_PHOI_LINK + ", " +
+                DBHelperThuoc.SDK + ", " +
 
-                DBHelperThuoc_Old.SDK_LINK + ", " +
-                DBHelperThuoc_Old.CAC_THUOC + ", " +
-                DBHelperThuoc_Old.CAC_THUOC_LINK + ", " +
+                DBHelperThuoc.SDK_LINK + ", " +
+                DBHelperThuoc.CAC_THUOC + ", " +
+                DBHelperThuoc.CAC_THUOC_LINK + ", " +
 //                DBHelperThuoc.GHI_CHU + ", " +          //Bảng con đã bỏ
 //                DBHelperThuoc.INDEX_COLOR + ", " +      //Bảng con đã bỏ
 
-                DBHelperThuoc_Old.CREATED_AT + ", " +   // Dành cho insert
-                DBHelperThuoc_Old.LAST_UPDATED + ") " +
+                DBHelperThuoc.CREATED_AT + ", " +   // Dành cho insert
+                DBHelperThuoc.LAST_UPDATED + ") " +
                 "VALUES (" +
                 "?, " +
                 "?, " +
@@ -145,48 +146,48 @@ public class WriterEngineChunked extends Thread {
                 "?, ?, ?, ?, ?, " +
                 "?, ?, ?, " +
                 "?, ?) " +
-                "ON CONFLICT(" + DBHelperThuoc_Old.MA_THUOC + ") " +
+                "ON CONFLICT(" + DBHelperThuoc.MA_THUOC + ") " +
                 "DO UPDATE SET " +
-                DBHelperThuoc_Old.URL_ID + " = excluded." + DBHelperThuoc_Old.URL_ID + ", " +
+                DBHelperThuoc.ID_URL + " = excluded." + DBHelperThuoc.ID_URL + ", " +
 //                DBHelperThuoc.PARENT_ID + " = excluded." + DBHelperThuoc.PARENT_ID + ", " +   //Bảng con đã bỏ
 //                DBHelperThuoc.LEVEL + " = excluded." + DBHelperThuoc.LEVEL + ", " +           //Bảng con đã bỏ
 //                DBHelperThuoc.KY_TU_SEARCH + " = excluded." + DBHelperThuoc.KY_TU_SEARCH + ", " +   //Bảng con đã bỏ
-                DBHelperThuoc_Old.MA_THUOC + " = excluded." + DBHelperThuoc_Old.MA_THUOC + ", " +
+                DBHelperThuoc.MA_THUOC + " = excluded." + DBHelperThuoc.MA_THUOC + ", " +
 
-                DBHelperThuoc_Old.MA_THUOC_LINK + " = excluded." + DBHelperThuoc_Old.MA_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.TEN_THUOC + " = excluded." + DBHelperThuoc_Old.TEN_THUOC + ", " +
-                DBHelperThuoc_Old.THANH_PHAN + " = excluded." + DBHelperThuoc_Old.THANH_PHAN + ", " +
-                DBHelperThuoc_Old.THANH_PHAN_LINK + " = excluded." + DBHelperThuoc_Old.THANH_PHAN_LINK + ", " + // Đã sửa tên cột ở đây
-                DBHelperThuoc_Old.NHOM_THUOC + " = excluded." + DBHelperThuoc_Old.NHOM_THUOC + ", " +
+                DBHelperThuoc.MA_THUOC_LINK + " = excluded." + DBHelperThuoc.MA_THUOC_LINK + ", " +
+                DBHelperThuoc.TEN_THUOC + " = excluded." + DBHelperThuoc.TEN_THUOC + ", " +
+                DBHelperThuoc.THANH_PHAN + " = excluded." + DBHelperThuoc.THANH_PHAN + ", " +
+                DBHelperThuoc.THANH_PHAN_LINK + " = excluded." + DBHelperThuoc.THANH_PHAN_LINK + ", " + // Đã sửa tên cột ở đây
+                DBHelperThuoc.NHOM_THUOC + " = excluded." + DBHelperThuoc.NHOM_THUOC + ", " +
 
-                DBHelperThuoc_Old.NHOM_THUOC_LINK + " = excluded." + DBHelperThuoc_Old.NHOM_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.DANG_THUOC + " = excluded." + DBHelperThuoc_Old.DANG_THUOC + ", " +
-                DBHelperThuoc_Old.DANG_THUOC_LINK + " = excluded." + DBHelperThuoc_Old.DANG_THUOC_LINK + ", " +
-                DBHelperThuoc_Old.SAN_XUAT + " = excluded." + DBHelperThuoc_Old.SAN_XUAT + ", " +
-                DBHelperThuoc_Old.SAN_XUAT_LINK + " = excluded." + DBHelperThuoc_Old.SAN_XUAT_LINK + ", " +
+                DBHelperThuoc.NHOM_THUOC_LINK + " = excluded." + DBHelperThuoc.NHOM_THUOC_LINK + ", " +
+                DBHelperThuoc.DANG_THUOC + " = excluded." + DBHelperThuoc.DANG_THUOC + ", " +
+                DBHelperThuoc.DANG_THUOC_LINK + " = excluded." + DBHelperThuoc.DANG_THUOC_LINK + ", " +
+                DBHelperThuoc.SAN_XUAT + " = excluded." + DBHelperThuoc.SAN_XUAT + ", " +
+                DBHelperThuoc.SAN_XUAT_LINK + " = excluded." + DBHelperThuoc.SAN_XUAT_LINK + ", " +
 
-                DBHelperThuoc_Old.DANG_KY + " = excluded." + DBHelperThuoc_Old.DANG_KY + ", " +
-                DBHelperThuoc_Old.DANG_KY_LINK + " = excluded." + DBHelperThuoc_Old.DANG_KY_LINK + ", " +
-                DBHelperThuoc_Old.PHAN_PHOI + " = excluded." + DBHelperThuoc_Old.PHAN_PHOI + ", " +
-                DBHelperThuoc_Old.PHAN_PHOI_LINK + " = excluded." + DBHelperThuoc_Old.PHAN_PHOI_LINK + ", " +
-                DBHelperThuoc_Old.SDK + " = excluded." + DBHelperThuoc_Old.SDK + ", " +
+                DBHelperThuoc.DANG_KY + " = excluded." + DBHelperThuoc.DANG_KY + ", " +
+                DBHelperThuoc.DANG_KY_LINK + " = excluded." + DBHelperThuoc.DANG_KY_LINK + ", " +
+                DBHelperThuoc.PHAN_PHOI + " = excluded." + DBHelperThuoc.PHAN_PHOI + ", " +
+                DBHelperThuoc.PHAN_PHOI_LINK + " = excluded." + DBHelperThuoc.PHAN_PHOI_LINK + ", " +
+                DBHelperThuoc.SDK + " = excluded." + DBHelperThuoc.SDK + ", " +
 
-                DBHelperThuoc_Old.SDK_LINK + " = excluded." + DBHelperThuoc_Old.SDK_LINK + ", " +
-                DBHelperThuoc_Old.CAC_THUOC + " = excluded." + DBHelperThuoc_Old.CAC_THUOC + ", " +
-                DBHelperThuoc_Old.CAC_THUOC_LINK + " = excluded." + DBHelperThuoc_Old.CAC_THUOC_LINK + ", " +
+                DBHelperThuoc.SDK_LINK + " = excluded." + DBHelperThuoc.SDK_LINK + ", " +
+                DBHelperThuoc.CAC_THUOC + " = excluded." + DBHelperThuoc.CAC_THUOC + ", " +
+                DBHelperThuoc.CAC_THUOC_LINK + " = excluded." + DBHelperThuoc.CAC_THUOC_LINK + ", " +
 //                DBHelperThuoc.GHI_CHU + " = excluded." + DBHelperThuoc.GHI_CHU + ", " +             //Bảng con đã bỏ
 //                DBHelperThuoc.INDEX_COLOR + " = excluded." + DBHelperThuoc.INDEX_COLOR + ", " +     //Bảng con đã bỏ
 
-                DBHelperThuoc_Old.LAST_UPDATED + " = excluded." + DBHelperThuoc_Old.LAST_UPDATED;   // Dành cho update, giữ nguyên CREATED_AT
+                DBHelperThuoc.LAST_UPDATED + " = excluded." + DBHelperThuoc.LAST_UPDATED;   // Dành cho update, giữ nguyên CREATED_AT
 
 
         stmtUpsertThuocChild = db.compileStatement(sqlUpsertThuocChild);
 
         //sqlUpsertUrlQueue: chỉ update: STATUS, ERR_MESSAGE, LAST_RECORD_INDEX, LAST_ACCESSED
         stmtUpdateUrlQueue = db.compileStatement(
-                "UPDATE " + tableUrlsQueue+ " SET " + DBHelperThuoc_Old.STATUS+ "=?, " +
-                        DBHelperThuoc_Old.ERR_MESSAGE + "= ?, " + DBHelperThuoc_Old.LAST_RECORD_INDEX + "= ?, " +
-                        DBHelperThuoc_Old.LAST_ACCESSED + "=?");
+                "UPDATE " + tableUrlsQueue+ " SET " + DBHelperThuoc.STATUS+ "=?, " +
+                        DBHelperThuoc.ERR_MESSAGE + "= ?, " + DBHelperThuoc.LAST_RECORD_INDEX + "= ?, " +
+                        DBHelperThuoc.LAST_ACCESSED + "=?");
 
         stmtUpsertUrlParent = db.compileStatement(sqlUpsertUrlParent);
 
@@ -345,7 +346,7 @@ public class WriterEngineChunked extends Thread {
         //stmtUpsertUrlParent.bindString(3, "key" + u.getUrl().split("key")[1]);  // là KY_TU_SEARCH
         stmtUpsertUrlParent.bindString(3, u.getUrl());  // KHÓA CHÍNH: u.getUrl() KHÔNG THỂ NULL
         // Nếu u bỏ maThuocP, thì Lấy maThuocP = "https://www..." +"key" + u.getUrl().split("key")[1];
-        stmtUpsertUrlParent.bindString(4, "https://www..." +"key" + u.getUrl().split("key")[1]);
+        stmtUpsertUrlParent.bindString(4, Utils.getMaThuocUrlCha(u.getUrl()));
         //stmtUpsertUrlParent.bindString(4, u.getMaThuoc_P());    // getMaThuoc_P: có thể lấy từ url
         stmtUpsertUrlParent.bindLong(5, u.getStatus());
         if (u.getGhiChu() != null && !u.getGhiChu().isEmpty()) stmtUpsertUrlParent.bindString(6, u.getGhiChu());

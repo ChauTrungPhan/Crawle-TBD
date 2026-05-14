@@ -24,19 +24,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class DBHelperThuoc extends SQLiteOpenHelper {
     private static final String TAG = "DBHelperThuoc";
     // Tên và Version Database
     public static final String DATABASE_NAME = "ThuocBietDuoc";
-    private static final int DATABASE_VERSION = 1;        //1; AppConstants.DATABASE_VERSION
+    private static final int DATABASE_VERSION = 2; // Tăng lên 2 để cập nhật cấu trúc bảng (thêm id_url)
 
     // Singleton instance và đối tượng DB dùng chung
     private static volatile DBHelperThuoc instance; //single connection tái sử dụng
     private SQLiteDatabase db;  //db=mDatabase
     private final Context mContext;
+    //private final Context context;
 
     // Cơ chế Lock để bảo vệ đa luồng
     // WriteLock: Dùng cho Insert/Update/Delete
@@ -63,7 +63,9 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     public static final String TABLE_THUOC_3KT = "table_thuoc_3kt";
     public static final String TABLE_THUOC_CUSTOM = "table_thuoc_custom";
     // Của Table Parent (cha)
-    public static final String PARENT_ID = "parent_id";   //PARENT_ID_OF_CRAWLED_URL
+    public static final String ID_URL = "id_url";   //PARENT_ID_OF_CRAWLED_URL: FK tham chiếu đến ID (là số nguyên sẽ nhanh nhất, không tốn dữ liệu)
+    //public static final String ID_URL = "id_url";   //FK tham chiếu đến ID (là số nguyên sẽ nhanh nhất, không tốn dữ liệu)
+    public static final String URL = "url"; //Của Cha(lưu link là url)
     public static final String LEVEL = "level";   //Hoặc LEVEL_OF_CRAWLED_URL
     public static final String MA_THUOC_P = "ma_thuoc_p";   //Cho bảng cha: TẠO MÃ GIẢ
     public static final String MA_THUOC_LINK_P = "link_ma_thuoc_p"; // Của Cha
@@ -100,20 +102,19 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     public static final String TABLE_URLS_QUEUE_CUSTOM = "table_urls_queue_custom";
 
     public static final String ID = "id";
-    public static final String URL_ID = "url_id";   //FK tham chiếu đến ID (là số nguyên sẽ nhanh nhất, không tốn dữ liệu)
-    public static final String URL = "url"; //Con Đã bỏ
-    public static final String URL_P = "url_p"; //Cha
+
+    public static final String P_URL = "p_url"; //Cha
     public static final String STATUS = "status";
     public static final String LAST_ACCESSED = "last_accessed";
     public static final String KY_TU_SEARCH = "ky_tu_search";
-    private final Context context;
+
 
     //1. BẢNG CON: String tạo bản con chứa thông tin thuốc: Xem như bảng con (child)
     public static final String createThuoc2kt_child  =
             "CREATE TABLE " +  TABLE_THUOC_2KT + "(" +      // %s SẼ ĐƯỢC THAY = BIẾN CHUỖI
                     ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
 
-                    URL_ID + " INTEGER NOT NULL, " +   // <-- khóa ngoại: FK tham chiếu tableParent.id (số nguyên sẽ nhanh)
+                    ID_URL + " INTEGER NOT NULL, " +   // <-- khóa ngoại: FK tham chiếu tableParent.id (số nguyên sẽ nhanh)
 
                     //URL + " TEXT NOT NULL, " +                     // <-- URL làm khóa ngoại: sẽ chậm, tốn ram, do chuỗi dài truy xuất sẽ cậm
 
@@ -154,8 +155,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                     // Khai báo khóa ngoại FOREIGN KEY phải đặt cuối cùng (ngoài định nghĩa cột)
                     //"FOREIGN KEY(" + URL +") REFERENCES %s(" + URL + ") ON DELETE CASCADE, " +
                     // Hoặc viết
-                    "FOREIGN KEY("+ URL_ID + ") REFERENCES " + TABLE_PARENT_URLS_2KT + "(" + ID + ") ON DELETE CASCADE, " +
-                    //"UNIQUE(" + URL_ID + ", " + MA_THUOC + ")" +  // 1 URL_ID chỉ chứa 1 mã thuốc duy nhất
+                    "FOREIGN KEY("+ ID_URL + ") REFERENCES " + TABLE_PARENT_URLS_2KT + "(" + ID + ") ON DELETE CASCADE, " +
+                    //"UNIQUE(" + ID_URL + ", " + MA_THUOC + ")" +  // 1 ID_URL chỉ chứa 1 mã thuốc duy nhất
                     // Đảm bảo mã thuốc là duy nhất trên toàn bảng (Global Unique)
                     //"UNIQUE(" + MA_THUOC + ")" +  // Toàn cầu (Toàn bảng): HỢP LÝ HƠN
                     "CONSTRAINT unique_ma_thuoc UNIQUE (" + MA_THUOC + ")" +
@@ -169,8 +170,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             "CREATE TABLE %s (" +      // %s SẼ ĐƯỢCTHAY = BIẾN CHUỖI
                     ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     //ID + " INTEGER NOT NULL, " + // KHÔNG CẦN ID, VÌ ĐÃ CÓ URL LÀ KHÓA CHÍNH
-                    PARENT_ID + " LONG NOT NULL UNIQUE, " +
-                    LEVEL + " INTEGER NOT NULL, " +          //Hoặc: PARENT_ID+LEVEL LÀM KHÓA CHÍNH
+                    ID_URL + " INTEGER NOT NULL UNIQUE, " +        // Chứa thứ tự cào url
+                    LEVEL + " INTEGER NOT NULL, " +          //Hoặc: ID_URL+LEVEL LÀM KHÓA CHÍNH
 
                     //KY_TU_SEARCH + " TEXT, " +              //KY_TU_SEARCH + " TEXT, " +: KHÔNG CẦN, LÂY TỪ URL
                     URL + " TEXT NOT NULL UNIQUE, " +        //UNIQUE: CŨNG LÀ LINK, tương đương tên: MA_THUOC_LINK
@@ -192,7 +193,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             "CREATE TABLE %s ( " +
                     ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     URL + " TEXT UNIQUE NOT NULL, " +
-                    PARENT_ID + " LONG NOT NULL, " +
+                    ID_URL + " INTEGER NOT NULL, " +
                     LEVEL + " INTEGER NOT NULL DEFAULT 1, " +   //đặt định ban đầu tùy chọn: 1 hoặc 0
                     STATUS + " INTEGER NOT NULL DEFAULT 0, " +
                     KY_TU_SEARCH + " TEXT, " +
@@ -334,9 +335,9 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
         // --- CÁC CHỈ MỤC (INDEX) BẮT BUỘC ĐỂ CHẠY NHANH ---
         // 4. TẠO INDEX (Sử dụng suffix để tên Index không bị trùng)
-        // Index cho URL_ID để JOIN nhanh
+        // Index cho ID_URL để JOIN nhanh
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_urlId_" + suffix +
-                " ON " + childTableName + "(" + URL_ID + ")");
+                " ON " + childTableName + "(" + ID_URL + ")");
 
         // Index cho MA_THUOC để kiểm tra trùng lặp (isMaThuocExists) nhanh
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maThuoc_" + suffix +
@@ -394,7 +395,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             //-- Index để tối ưu truy vấn:
             // Index để join nhanh
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_2KT +"(" + DBHelperThuoc.URL_ID +");"   //để tăng tốc join.
+                    TABLE_THUOC_2KT +"(" + DBHelperThuoc.ID_URL +");"   //để tăng tốc join.
             );
             // Thêm index riêng cho maThuoc
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
@@ -409,7 +410,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             //db.execSQL(String.format(CREATE_TABLE_THUOC_CHILD, TABLE_THUOC_3KT, TABLE_PARENT_URLS_3KT));
             // Index để join nhanh
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_3KT +"(" + DBHelperThuoc.URL_ID +");"
+                    TABLE_THUOC_3KT +"(" + DBHelperThuoc.ID_URL +");"
             );
             // Thêm index riêng cho maThuoc
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
@@ -422,7 +423,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             //db.execSQL(String.format(CREATE_TABLE_THUOC_CHILD, TABLE_THUOC_CUSTOM, TABLE_PARENT_URLS_CUSTOM));
             // Index để join nhanh
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_CUSTOM +"(" + DBHelperThuoc.URL_ID +");"
+                    TABLE_THUOC_CUSTOM +"(" + DBHelperThuoc.ID_URL +");"
             );
             // Thêm index riêng cho maThuoc
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
@@ -485,14 +486,14 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     /**
      * 5. Ví dụ hàm Ghi Dữ Liệu: Sử dụng WriteLock
      */
-    public long addUrlToQueue(String queueTableName, String url, long parentId, int level, String kyTuSearch) {
+    public long addUrlToQueue(String queueTableName, String url, int idUrl, int level, String kyTuSearch) {
         long result = -1;   //long newRowId = -1;
         dbLock.writeLock().lock(); // Khóa các luồng khác lại để ghi
         try {
             SQLiteDatabase db = getDb();
             ContentValues cv = new ContentValues();
             cv.put(URL, url);
-            cv.put(PARENT_ID, parentId);
+            cv.put(ID_URL, idUrl);
             cv.put(LEVEL, level);
             cv.put(STATUS, 0);
             cv.put(KY_TU_SEARCH, kyTuSearch);
@@ -555,7 +556,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                         // Thêm mới nếu chưa có
                         cv.put(URL, url);
                         cv.put(LEVEL, 0);
-                        cv.put(PARENT_ID, i + 1);   // Logic ID cha của bạn
+                        cv.put(ID_URL, i + 1);   // Logic ID cha của bạn
 
                         db.insertOrThrow(queueTableName, null, cv);
                         Log.d(TAG, "Inserted new root URL to queue: " + url + " in " + queueTableName);
@@ -590,7 +591,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
         return db.query(
                 queueTableName,
-                new String[]{ID, URL, PARENT_ID, LEVEL, KY_TU_SEARCH},
+                new String[]{ID, URL, ID_URL, LEVEL, KY_TU_SEARCH},
                 selection,       // STATUS + " = 0",
                 selectionArgs,
                 null,
@@ -701,8 +702,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
         ContentValues cv = new ContentValues();
         //cv.put(URL, thuoc.url);
-        cv.put(URL_ID, thuoc.url_id);
-        //values.put(PARENT_ID, thuoc.parent_id);
+        cv.put(ID_URL, thuoc.id_url);
+        //values.put(ID_URL, thuoc.id_url);
         //values.put(LEVEL, thuoc.level);
         //values.put(KY_TU_SEARCH, thuoc.ky_tu_search);
         cv.put(MA_THUOC, thuoc.ma_thuoc);
@@ -738,9 +739,9 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             int rowsAffected = db.update(tableName, cv, MA_THUOC + " = ?", new String[]{thuoc.ma_thuoc});
             if (rowsAffected == 0) {
                 resultId = db.insertOrThrow(tableName, null, cv);
-                Log.d(TAG, "Inserted Thuoc: " + thuoc.ma_thuoc + " into " + tableName + " from url_id: " + thuoc.url_id);
+                Log.d(TAG, "Inserted Thuoc: " + thuoc.ma_thuoc + " into " + tableName + " from url_id: " + thuoc.id_url);
             } else {
-                Log.d(TAG, "Updated Thuoc: " + thuoc.ma_thuoc + " in " + tableName + " from url_id: " + thuoc.url_id);
+                Log.d(TAG, "Updated Thuoc: " + thuoc.ma_thuoc + " in " + tableName + " from url_id: " + thuoc.id_url);
                 Cursor cursor = db.query(tableName, new String[]{ID}, MA_THUOC + " = ?", new String[]{thuoc.ma_thuoc}, null, null, null);
                 if (cursor.moveToFirst()) {
                     resultId = cursor.getLong(cursor.getColumnIndexOrThrow(ID));
@@ -794,18 +795,18 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
      * Chèn url con (phân trang) tìm được vào Bảng Queue dùng để Crawl (initUrlsTable)
      * @param initUrlsTable
      * @param url
-     * @param parentId
+     * @param idUrl
      * @param level
      */
     public void saveChildUrlToUrlQueueTable(String initUrlsTable,
-                                            String url, long parentId, int level) {
+                                            String url, int idUrl, int level) {
 
         // level đã + 1 khi gọi hàm này. PP mới level là số trang page của trang con
         if (isUrlExists(initUrlsTable, url)) return;  // Cần không vì initUrlsTable có url là khóa chính
 
         //Lưu url con vào bảng initUrlsTable
         ContentValues values = new ContentValues();
-        values.put(DBHelperThuoc.PARENT_ID, parentId);
+        values.put(DBHelperThuoc.ID_URL, idUrl);
         values.put(DBHelperThuoc.LEVEL, level); //leve > 0 là url con
         values.put(DBHelperThuoc.URL, url); // là khóa chính
         values.put(DBHelperThuoc.STATUS, 0);    //Mặc định là 0 (chưa xử lý)
@@ -849,10 +850,10 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
     }
 
-    public void insertParent(SQLiteDatabase db, String tableParent, String parent_id,String level,
+    public void insertParent(SQLiteDatabase db, String tableParent, String id_url,String level,
                              String url, String createdAt, String ghiChu, int indexColor, String errorMessage) {
         ContentValues values = new ContentValues();
-        values.put(PARENT_ID, parent_id);
+        values.put(ID_URL, id_url);
         values.put(LEVEL, level);
         values.put(URL, url);
         values.put(CREATED_AT, createdAt);
@@ -889,8 +890,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         try {
             // Insert vào Bảng con
             String query = "INSERT INTO " + tableThuoc2KThay3KT + " (" +
-                    URL_ID + ", " +
-                    PARENT_ID + ", " +
+                    ID_URL + ", " +
+                    ID_URL + ", " +
                     LEVEL + ", " +
                     KY_TU_SEARCH + ", " +
                     MA_THUOC + ", " +
@@ -931,8 +932,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                     "?, ?) " +
                     "ON CONFLICT(" + MA_THUOC + ") " +
                     "DO UPDATE SET " +
-                    URL_ID + " = excluded." + URL_ID + ", " +
-                    PARENT_ID + " = excluded." + PARENT_ID + ", " +
+                    ID_URL + " = excluded." + ID_URL + ", " +
+                    ID_URL + " = excluded." + ID_URL + ", " +
                     LEVEL + " = excluded." + LEVEL + ", " +
                     KY_TU_SEARCH + " = excluded." + KY_TU_SEARCH + ", " +
                     MA_THUOC + " = excluded." + MA_THUOC + ", " +
@@ -971,8 +972,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                 stmt.clearBindings();
                 // binding giá trị như cũ
                 int colIndex = 1;
-                stmt.bindLong(colIndex++, t.url_id);      //parent=parent_id_of_crawled_url
-                //stmt.bindLong(colIndex++, t.parent_id);      //parent=parent_id_of_crawled_url
+                stmt.bindLong(colIndex++, t.id_url);      //parent=parent_id_of_crawled_url
+                //stmt.bindLong(colIndex++, t.id_url);      //parent=parent_id_of_crawled_url
                 //stmt.bindLong(colIndex++, t.level);             //LEVEL=level_of_crawled_url
                 //stmt.bindString(colIndex++, t.ky_tu_search != null ? t.ky_tu_search : "");
                 stmt.bindString(colIndex++, t.ma_thuoc != null ? t.ma_thuoc : "");
@@ -1033,8 +1034,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         try {   //Của writeLock
             //SQLiteStatement stmt = null; // Khai báo stmt ở đây
             String query = "INSERT INTO " + tableThuoc2KThay3KT + " (" +
-                    URL_ID + ", " +
-                    PARENT_ID + ", " +
+                    ID_URL + ", " +
+
                     LEVEL + ", " +
                     KY_TU_SEARCH + ", " +
                     MA_THUOC + ", " +
@@ -1072,11 +1073,11 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                     "?, ?, ?, ?, ?, " +
                     "?, ?, ?, ?, ?, " +
                     "?) " +
-                    "ON CONFLICT(" + URL_ID + ", " + MA_THUOC + ") " +
+                    "ON CONFLICT(" + ID_URL + ", " + MA_THUOC + ") " +
                     "DO UPDATE SET " +
 
-                    URL_ID + " = excluded." + URL_ID + ", " +
-                    PARENT_ID + " = excluded." + PARENT_ID + ", " +
+                    ID_URL + " = excluded." + ID_URL + ", " +
+                    ID_URL + " = excluded." + ID_URL + ", " +
                     LEVEL + " = excluded." + LEVEL + ", " +
                     KY_TU_SEARCH + " = excluded." + KY_TU_SEARCH + ", " +
                     MA_THUOC + " = excluded." + MA_THUOC + ", " +
@@ -1115,8 +1116,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                 for (ThuocSQLite t : listThuoc) {
                     stmt.clearBindings();   // Xóa bind cũ
                     int colIndex = 1;
-                    stmt.bindLong(colIndex++, t.url_id);
-                    //stmt.bindLong(colIndex++, t.parent_id);      //parent=parent_id_of_crawled_url
+                    stmt.bindLong(colIndex++, t.id_url);
+                    //stmt.bindLong(colIndex++, t.id_url);      //parent=parent_id_of_crawled_url
                     //stmt.bindLong(colIndex++, t.level);             //LEVEL=level_of_crawled_url
                     //stmt.bindString(colIndex++, t.ky_tu_search != null ? t.ky_tu_search : "");
                     stmt.bindString(colIndex++, t.ma_thuoc != null ? t.ma_thuoc : "");
@@ -1202,9 +1203,9 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         SQLiteDatabase db = getDb();
         dbLock.writeLock().lock();
         try {
-            db.beginTransactionNonExclusive();
+            db.beginTransactionNonExclusive();  // Cho phép luồn khác đọc, không cho ghi: Nhanh hơn
             try {
-                //1. Xóa toàn bộ bản ghi
+                //1. Xóa toàn bộ bản ghi: Nm trong Transaction nếu muốn RollBack, phục hồi nếu cúp điện
                 long rows = db.delete(tableName, null, null);
 
                 //2. Reset ID tự tăng (sqlite_sequence) một cách an toàn
@@ -1283,8 +1284,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         List<String> listKyTu = GetKyTuAZ.getList_AZ_2KThay3KT(initUrlsTable, k0, k1); //KHÔNG gồm k1
         List<String[]> listRowUrls = new ArrayList<>();
         // Lấy DB trước khi khóa để nếu DB hỏng thì crash luôn, chưa kịp khóa
-        SQLiteDatabase db = getDb();
-        int parentId = 0;
+        SQLiteDatabase db = getDb();    // Nên truyền vào để thống nhất, tăng tốc độ
+        int idUrl = 0;
         // Ghi URL vào bảng initUrlsTable
         //dbWriteLock.lock();
         dbLock.writeLock().lock(); // Dùng readLock
@@ -1297,7 +1298,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                         continue; //Chỉ kiểm tra url rỗng (hoặc chỉ chứa các khoảng trắng)
                     // Vẫn lấy kytu có khoảng trắng ở đầu và cuối
                     String[] row = new String[3];
-                    row[0] = String.valueOf(parentId);  //parentId
+                    row[0] = String.valueOf(idUrl);  //parentId
                     row[1] = String.valueOf(1);     //Cũ: level = 0; Mới: level (thành page) = 1
                     row[2] = (AppConstants.URL0 + kytu + AppConstants.URL1.trim());   //url
 
@@ -1313,7 +1314,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
                     // Ghi URL vào bảng initUrlsTable
                     ContentValues values = new ContentValues();
-                    values.put(DBHelperThuoc.PARENT_ID, parentId);
+                    values.put(DBHelperThuoc.ID_URL, idUrl);
                     values.put(DBHelperThuoc.LEVEL, 1); //Cũ: Của url cha level = 0 (Mặc định); Mới: level (thành page) = 1 (Mặc định)
                     values.put("url", (AppConstants.URL0 + kytu + AppConstants.URL1).trim());
                     values.put("status", 0); // 0: chưa xử lý, có thể thêm cột 'completed' nếu cần. Mặc định completed = 0 (uncompleted)
@@ -1322,7 +1323,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                     //dbThuoc.insert( initUrlsTable, null, values); //initUrlsTable. tableNameThuoc_Nao phải có
                     //Mới: không ném lỗi
                     db.insertWithOnConflict(initUrlsTable, null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
-                    parentId++;
+                    idUrl++;
                 }
 
                 db.setTransactionSuccessful();
@@ -1352,12 +1353,12 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         // Chưa xử lý có STATUS = 0
         //dbWriteLock.lock();
         dbLock.readLock().lock(); // Dùng readLock: vì chỉ đọc, không ghi
-        try (Cursor cursor = db.query(initUrlsTable, new String[]{URL, PARENT_ID, LEVEL}, STATUS + "=?", new String[]{String.valueOf(0)}, null, null, null, null);){
+        try (Cursor cursor = db.query(initUrlsTable, new String[]{URL, ID_URL, LEVEL}, STATUS + "=?", new String[]{String.valueOf(0)}, null, null, null, null);){
             if (cursor.moveToFirst()) {
                 do {
                     String[] row = new String[3];
                     row[0] = cursor.getString(0);   //url
-                    row[1] = cursor.getString(1);   // PARENT_ID
+                    row[1] = cursor.getString(1);   // ID_URL
                     row[2] = cursor.getString(2);   //LEVEL: Cũ: level = 0; Mới: level (thành page) = 1
                     listRowUrls.add(row);
                 } while (cursor.moveToNext());
@@ -1481,7 +1482,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
         long result = -1;
         ContentValues cv = new ContentValues();
-        //values.put(PARENT_ID, thuoc.parent_id);   //PARENT=PARENT_ID_OF_CRAWLED_URL
+        //values.put(ID_URL, thuoc.id_url);   //PARENT=PARENT_ID_OF_CRAWLED_URL
         //values.put(LEVEL, thuoc.level);
         //values.put(KY_TU_SEARCH, thuoc.ky_tu_search);
         cv.put(MA_THUOC, thuoc.ma_thuoc);
@@ -1528,12 +1529,12 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
      * @param tableThuoc Tên của bảng cần xử lý trùng lặp.
      * @return Số lượng bản ghi trùng lặp đã bị xóa.
      */
-    public long deleteDuplicateRecords(String tableThuoc) {
+    public int deleteDuplicateRecords(String tableThuoc) {
         // Kiểm tra bảng tồn tại: Trong thực tế, nếu bạn là người quản lý Database, bạn biết bảng đó chắc chắn tồn tại.
         // Việc query vào sqlite_master mỗi lần xóa là không cần thiết và làm chậm tốc độ.
         // Bạn có thể bỏ qua bước này để tối ưu.
         SQLiteDatabase db = getDb();
-        long deletedRows = 0;
+        int deletedRows = 0;
 
         dbLock.writeLock().lock();
         try {
@@ -1577,7 +1578,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 //         URL + " TEXT UNIQUE," + // URL phải là UNIQUE
 //         STATUS + " INTEGER," +
 //         LEVEL + " INTEGER," + // Thêm cột LEVEL
-//         PARENT_ID + " INTEGER," + // Thêm cột PARENT_ID
+//         ID_URL + " INTEGER," + // Thêm cột ID_URL
 //         CREATED_AT + " TEXT" +
 //         ");";
 
@@ -1598,7 +1599,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         //dbWriteLock.lock();
         dbLock.readLock().lock(); // Dùng readLock
         try {
-            String[] columns = {URL, LEVEL, PARENT_ID, STATUS}; // Các cột cần lấy
+            String[] columns = {URL, LEVEL, ID_URL, STATUS}; // Các cột cần lấy
             try (Cursor cursor = db.query(table_Url_Queue, columns,
                     STATUS + " = ?", new String[]{String.valueOf(status)},
                     null, null, null)) {
@@ -1612,13 +1613,13 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                     // 2. Lấy Index của cột MỘT LẦN DUY NHẤT trước vòng lặp
                     int urlIdx = cursor.getColumnIndexOrThrow(URL);
                     int levelIdx = cursor.getColumnIndexOrThrow(LEVEL);
-                    int parentIdIdx = cursor.getColumnIndexOrThrow(PARENT_ID);
+                    int parentIdIdx = cursor.getColumnIndexOrThrow(ID_URL);
                     long currentTime = System.currentTimeMillis() / 1000;
 
                     do {
                         String url = cursor.getString(urlIdx);
                         int level = cursor.getInt(levelIdx);
-                        long parentId = cursor.getLong(parentIdIdx);
+                        int idUrl = cursor.getInt(parentIdIdx);
 
                         // Logic xử lý chuỗi của bạn
                         if (url.contains("+")) {    //Xem
@@ -1634,7 +1635,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                         if (url.contains("key")) {
                             maThuocP = "https://www..." + "key" + url.split("key")[1];    // Tạo Mã Thuốc giả chu Url cha
                         }
-                        urlInfos.add(new UrlInfo(url, parentId, level, maThuocP, status,
+                        urlInfos.add(new UrlInfo(url, idUrl, level, maThuocP, status,
                                 null, 0, -1, System.currentTimeMillis() / 1000));
                     } while (cursor.moveToNext());
                 }
@@ -1811,7 +1812,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
 
             // 4. Truy vấn kiểm tra tồn tại (loại trừ url_id hiện tại)
             // Dùng LIMIT 1 để tối ưu tốc độ
-            String selection = MA_THUOC + " = ? AND " + URL_ID + " != ?";
+            String selection = MA_THUOC + " = ? AND " + ID_URL + " != ?";
             String[] selectionArgs = {maThuoc, String.valueOf(url_id)};
 
             try (Cursor cursor = db.query(
@@ -1835,6 +1836,8 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     // Thêm
     // CẬP NHẬT PHƯƠNG THỨC loadQueueUrls (nếu có) tương tự như loadCompletedUrls
     private void loadQueueUrls(String tableName, ConcurrentLinkedQueue<String> urlQueue) {
+        // Hàm này Pass-by-reference (Truyền tham chiếu): truyền một đối tượng như ConcurrentLinkedQueue vào một phương thức,
+        // phương thức đó sẽ thao tác trực tiếp trên chính đối tượng mà bạn đã truyền vào.
 
         // Tương tự: loadCompletedUrls
         // ...
@@ -1880,119 +1883,181 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     }
 
     public List<UrlInfo> getListQueueUrls(SettingsRepository settingsRepository) {
-        String[] arrayKyTu = new String[0];
+        CrawlType crawlType = settingsRepository.getSelectedCrawlType();
+
         //int k0 = settingsRepository.getK0(crawlType.getK0PrefKey()); // Đảm bảo getK0 nhận PrefKey
         //int k1 = settingsRepository.getK1(crawlType.getK1PrefKey()); // Đảm bảo getK1 nhận PrefKey
-        arrayKyTu = GetKyTuAZ.getArrayAZk0k1(settingsRepository);
-        CrawlType crawlType = settingsRepository.getSelectedCrawlType();
+        String[] arrayKyTu = GetKyTuAZ.getArrayAZk0k1(settingsRepository);
+        // Lấy Bảng Queue tùy loại đang làm
+        String queueTable = crawlType.getUrlQueueTableName();
 
         // Lưu tổng Ký tự LẤY ĐƯỢC, CŨNG = list URL.size
         settingsRepository.saveTotalUrls(crawlType.getTotalUrlsPrefKey(), arrayKyTu.length);
+
+        // Lấy list urlInfos: Mỗi Phần tử urlInfos là 1 record
+        List<UrlInfo> urlInfos = new ArrayList<>();
+
+        //int idUrl = 0;  // idUrl=parentId: PHẢI LÀ k0 ĐỂ ĐẢM BẢO THEO THỨ TỰ: VÌ CÓ THỂ CHỌN BAN ĐẦU K0=3
+        int idUrl = settingsRepository.getK0(crawlType.getK0PrefKey());
+        // 1. Chiếm giữ quyền ghi tuyệt đối
+        SQLiteDatabase db = getDb();
+        dbLock.writeLock().lock();
+
+        try {
+            // 2. Xóa dữ liệu cũ
         /** PHẢI DELETE HẾT RECORD TRONG BẢNG: crawlType.getUrlQueueTableName()
          * RỒI LOAD URL MỚI TÙY THEO HỆ SỐ K0, K1 LẠI
          */
-        this.deleteAllRecords(crawlType.getUrlQueueTableName());
-        SQLiteDatabase dbThuoc = this.getWritableDatabase();    // Không cần close
+            //this.deleteAllRecords(crawlType.getUrlQueueTableName());  //cũ
+            db.delete(queueTable, null, null);  // Ngoài transaction: không cần rollback
 
-        // Lấu list urlInfos: Mỗi Phần tử urlInfos là 1 record
-        List<UrlInfo> urlInfos = new ArrayList<>();
-        String kytu;
-        //long parentId = 0;  // parentId: PHẢI LÀ k0 ĐỂ ĐẢM BẢO THEO THỨ TỰ: VÌ CÓ THỂ CHỌN BAN ĐẦU K0=3
-        long parentId = settingsRepository.getK0(crawlType.getK0PrefKey()); // Đảm bảo getK0 nhận PrefKey
-        // Ghi URL vào bảng initUrlsTable
-        //SQLiteDatabase dbThuoc = DBHelperThuoc.getInstance(context).getWritableDatabase();
-        for (int n=0; n < arrayKyTu.length; n++){
-            kytu = arrayKyTu[n];
-            if (kytu.trim().isEmpty()) continue; //Chỉ kiểm tra url rỗng (hoặc chỉ chứa các khoảng trắng)
-            // Vẫn lấy kytu có khoảng trắng ở đầu và cuối
-//            String[] row = new String[3];
-//            row[0] = String.valueOf(parentId);  //parentId
-//            row[1] = String.valueOf(1);     //Cũ: level = 0; Mới: level (thành page) = 1
-//            row[2] = (AppConstants.URL0 + kytu + AppConstants.URL1).trim();   //url
-//
-//            // Xem: tìm lỗi thiếu đếm processedUrlStart1Counter thiếu 1
-//            //Log.d(TAG, "loadUrlsFromAsset: processedUrlStart1Counter, url (start=1) = " + row[2]+ ";parentId=" + row[0]);
-//            //
-//            listRowUrls.add(row);   // Hoặc chỉ 1 lệnh: listRowUrls.add(new String[]{String.valueOf(parentId), String.valueOf(parentId), (url0 + kytu + url1).trim()});
+            // RESET ID về 1 (Xóa bộ đếm trong sqlite_sequence)
+            db.execSQL("DELETE FROM sqlite_sequence WHERE name = ?", new String[]{queueTable});
 
-//            kytu = url0 + kytu + url1;
-//            String trimmedUrl = kytu.trim(); //Cắt khoảng trắng ở đầu và cuối
-//            urls.add(trimmedUrl);
+            // 3. Bắt đầu Transaction để ghi hàng loạt cực nhanh
+            db.beginTransactionNonExclusive();
 
-            // Sử dụng List<UrlInfo> urlInfos
+            try {
+                for (String kytu : arrayKyTu) {
+                    if (kytu == null || kytu.trim().isEmpty()) continue;
 
-            String url = (AppConstants.URL0 + kytu + AppConstants.URL1).trim();   //url
-            // Xem
-            if ((url.contains("+"))||url.contains("A+")||(url.contains("+A"))) {
-                int iStop = 0;
-                Log.d("CrawlType", "getLisUrLFromCrawlType: DAU CONG=" + url);
+                    String fullUrl = (AppConstants.URL0 + kytu + AppConstants.URL1).trim();
+                    String maThuocP = "https://www..." + "key" + fullUrl.split("key")[1];
+                    long currentTime = System.currentTimeMillis() / 1000;
+
+                    // Thêm vào list trả về
+                    urlInfos.add(new UrlInfo(fullUrl, idUrl, 1, maThuocP, 0,
+                            null, 0, -1, currentTime));
+
+                    // Ghi vào Database
+                    ContentValues values = new ContentValues();
+                    values.put(DBHelperThuoc.ID_URL, idUrl);
+                    values.put(DBHelperThuoc.URL, fullUrl);
+                    // STATUS và LEVEL đã có DEFAULT trong định nghĩa bảng nên không cần put nếu dùng giá trị mặc định
+
+                    db.insertWithOnConflict(queueTable, null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                    idUrl++;
+                }
+                db.setTransactionSuccessful(); // Đánh dấu hoàn tất thành công
+            } finally {
+                db.endTransaction(); // Kết thúc transaction
             }
-
-            //int level = 1;     //Cũ: level = 0; Mới: level (thành page) = 1
-            //long parentId = String.valueOf(parentId);  //parentId
-            //urlInfos.add(new UrlInfo(url, level, parentId++));
-            // Giá trị trả về
-            //String kyTuSearch = "key" + url.split("key")[1];    // là UNIQUE, tránh mã thuốc bị null url Hoặc: "key" + url.split("key")[1]: Xem như duy nhất
-            String maThuocP = "https://www..." +"key" + url.split("key")[1];
-            urlInfos.add(new UrlInfo(AppConstants.URL0 + kytu + AppConstants.URL1.trim(), parentId, 1, maThuocP,0,
-                    null, 0, -1, System.currentTimeMillis()/1000));
-
-            // Ghi URL vào bảng urlQueueTableName
-            ContentValues values = new ContentValues();
-            values.put(DBHelperThuoc.PARENT_ID, parentId);
-            // LEVEL: mặt đinh = 1
-            //values.put(DBHelperThuoc.LEVEL, 1); //Cũ: Của url cha level = 0 (Mặc định); Mới: level (thành page) = 1 (Mặc định)
-            // STATUS: BAN ĐẦU mặt đinh = 0 chưa xử lý
-            //values.put(STATUS, 0); // 0: chưa xử lý, có thể thêm cột 'completed' nếu cần. Mặc định completed = 0 (uncompleted)
-            values.put("url", (AppConstants.URL0 + kytu + AppConstants.URL1).trim());
-
-            //values.put(ERR_MESSAGE, "");    //Ban đầu chưa có ERR_MESSAGE=""
-            //values.put(LAST_RECORD_INDEX, -1);  //-1: Mặc đinh= -1, nghĩa là BAN ĐÀU chưa có record cuối thu được
-            //values.put(DBHelperThuoc.BOOLEAN_URL_CHILD, 0); // Mặc định ban đầu là 0 (false) : không phai là url Child (con)
-            //Cũ: có ném lô
-            //dbThuoc.insert( initUrlsTable, null, values); //initUrlsTable. tableNameThuoc_Nao phải có
-            //Mới: không ném lỗi
-            //dbThuoc.insertWithOnConflict( initUrlsTable, null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
-            dbThuoc.insertWithOnConflict( crawlType.getUrlQueueTableName(), null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
-            parentId++;
+        } catch (Exception e) {
+            Log.e("DB_QUEUE", "Lỗi khởi tạo Queue: " + e.getMessage());
+        } finally {
+            dbLock.writeLock().unlock(); // Nhả khóa cho các luồng khác
         }
 
         return urlInfos;
 
+
+            //////////////////////////////////////////////////////
+//        String kytu;
+//
+//        // Ghi URL vào bảng initUrlsTable
+//        //SQLiteDatabase dbThuoc = DBHelperThuoc.getInstance(context).getWritableDatabase();
+//        for (int n=0; n < arrayKyTu.length; n++){
+//            kytu = arrayKyTu[n];
+//            if (kytu.trim().isEmpty()) continue; //Chỉ kiểm tra url rỗng (hoặc chỉ chứa các khoảng trắng)
+//            // Vẫn lấy kytu có khoảng trắng ở đầu và cuối
+////            String[] row = new String[3];
+////            row[0] = String.valueOf(parentId);  //parentId
+////            row[1] = String.valueOf(1);     //Cũ: level = 0; Mới: level (thành page) = 1
+////            row[2] = (AppConstants.URL0 + kytu + AppConstants.URL1).trim();   //url
+////
+////            // Xem: tìm lỗi thiếu đếm processedUrlStart1Counter thiếu 1
+////            //Log.d(TAG, "loadUrlsFromAsset: processedUrlStart1Counter, url (start=1) = " + row[2]+ ";parentId=" + row[0]);
+////            //
+////            listRowUrls.add(row);   // Hoặc chỉ 1 lệnh: listRowUrls.add(new String[]{String.valueOf(parentId), String.valueOf(parentId), (url0 + kytu + url1).trim()});
+//
+////            kytu = url0 + kytu + url1;
+////            String trimmedUrl = kytu.trim(); //Cắt khoảng trắng ở đầu và cuối
+////            urls.add(trimmedUrl);
+//
+//            // Sử dụng List<UrlInfo> urlInfos
+//
+//            String url = (AppConstants.URL0 + kytu + AppConstants.URL1).trim();   //url
+//            // Xem
+//            if ((url.contains("+"))||url.contains("A+")||(url.contains("+A"))) {
+//                int iStop = 0;
+//                Log.d("CrawlType", "getLisUrLFromCrawlType: DAU CONG=" + url);
+//            }
+//
+//            //int level = 1;     //Cũ: level = 0; Mới: level (thành page) = 1
+//            //long parentId = String.valueOf(parentId);  //parentId
+//            //urlInfos.add(new UrlInfo(url, level, parentId++));
+//            // Giá trị trả về
+//            //String kyTuSearch = "key" + url.split("key")[1];    // là UNIQUE, tránh mã thuốc bị null url Hoặc: "key" + url.split("key")[1]: Xem như duy nhất
+//            String maThuocP = "https://www..." +"key" + url.split("key")[1];
+//            urlInfos.add(new UrlInfo(AppConstants.URL0 + kytu + AppConstants.URL1.trim(), parentId, 1, maThuocP,0,
+//                    null, 0, -1, System.currentTimeMillis()/1000));
+//
+//            // Ghi URL vào bảng urlQueueTableName
+//            ContentValues values = new ContentValues();
+//            values.put(DBHelperThuoc.ID_URL, parentId);
+//            // LEVEL: mặt đinh = 1
+//            //values.put(DBHelperThuoc.LEVEL, 1); //Cũ: Của url cha level = 0 (Mặc định); Mới: level (thành page) = 1 (Mặc định)
+//            // STATUS: BAN ĐẦU mặt đinh = 0 chưa xử lý
+//            //values.put(STATUS, 0); // 0: chưa xử lý, có thể thêm cột 'completed' nếu cần. Mặc định completed = 0 (uncompleted)
+//            values.put("url", (AppConstants.URL0 + kytu + AppConstants.URL1).trim());
+//
+//            //values.put(ERR_MESSAGE, "");    //Ban đầu chưa có ERR_MESSAGE=""
+//            //values.put(LAST_RECORD_INDEX, -1);  //-1: Mặc đinh= -1, nghĩa là BAN ĐÀU chưa có record cuối thu được
+//            //values.put(DBHelperThuoc.BOOLEAN_URL_CHILD, 0); // Mặc định ban đầu là 0 (false) : không phai là url Child (con)
+//            //Cũ: có ném lô
+//            //dbThuoc.insert( initUrlsTable, null, values); //initUrlsTable. tableNameThuoc_Nao phải có
+//            //Mới: không ném lỗi
+//            //dbThuoc.insertWithOnConflict( initUrlsTable, null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
+//            dbThuoc.insertWithOnConflict( crawlType.getUrlQueueTableName(), null, values, SQLiteDatabase.CONFLICT_IGNORE); //initUrlsTable. tableNameThuoc_Nao phải có
+//            parentId++;
+//        }
+//
+//        return urlInfos;
+        ///
+
     }
 
     public static class ColumnInfoUrlCha {
-        public final String dbColumnName;      // Tên cột trong SQLite
-        public final String headerName; // Tiêu đề cột trong Excel
-        //public final String title;             // Tiêu đề cột trong Excel
-        public final String dbLinkColumnName;  // Nếu cần hyperlink
+        public final String dbColumnName;   // Tên cột trong SQLite
+        //public final String headerName;     // Tiêu đề cột trong Excel
+        //public final String title;        // Tiêu đề cột trong Excel
+        //public final String dbLinkColumnName;  // Nếu cần hyperlink
+        public final String dbUrlCol_p;  // Chứa URL: Nếu cần hyperlink
+        public final String ghiChu_p;  // Chứa URL: Nếu cần hyperlink
         public final int width;
         public final boolean wrapText;
-        public int columnIndex = -1;           // Gán sau khi query
-        public int linkColumnIndex = -1;
+        public int colIndex = -1;        // Gán sau khi query
+        public int linkColIndex = -1;
 
-        public ColumnInfoUrlCha(String dbColumnName, String headerName, String dbLinkColumnName, int width, boolean wrapText) {
+        public ColumnInfoUrlCha(String dbColumnName, String dbUrlCol_P, String ghiChu_P, int width, boolean wrapText) {
             this.dbColumnName = dbColumnName;
+            this.dbUrlCol_p = dbUrlCol_P;
+            this.ghiChu_p = ghiChu_P;
             //this.title = title;
-            this.headerName = headerName;
-            this.dbLinkColumnName = dbLinkColumnName;
+            //this.headerName = headerName;
+            //this.dbLinkColumnName = dbLinkColumnName;
+
+
             this.width = width;
             this.wrapText = wrapText;
         }
     }
 
     public static final List<ColumnInfoUrlCha> EXPORT_COLUMNS_CHA = Arrays.asList(
-            // Ý nghĩa: ColumnInfo(String dbCol, String header, String linkCol, int width, boolean wrapText)new ColumnInfo(DBHelperThuoc.PARENT_ID, "PARENT_ID", null, 12 * 256, false));    // hoặc PARENT_ID=Mã cha
-            new ColumnInfoUrlCha(PARENT_ID, "PARENT_ID", null, 12 * 256, false),    // hoặc PARENT_ID=Mã cha
+            // Ý nghĩa: ColumnInfo(String dbCol, String header, String linkCol, int width, boolean wrapText)new ColumnInfo(DBHelperThuoc.ID_URL, "ID_URL", null, 12 * 256, false));    // hoặc ID_URL=Mã cha
+            new ColumnInfoUrlCha(ID_URL, "ID_URL", null,12 * 256, false),    // hoặc ID_URL=Mã cha
             new ColumnInfoUrlCha(LEVEL, "Cấp độ", null, 8 * 256, false),            // Hoặc : LEVEL
 
             new ColumnInfoUrlCha(KY_TU_SEARCH, "KÝ TỰ SEARCH", null, 15 * 256, false),  //"Chữ cái tìm kiếm"
 
             // URL = MA_THUOC_LINK_P: ĐẶT TRƯỚC KY_TU_SEARCH ĐỂ DUYỆT TRƯỚC ĐỂ LẤY ĐƯỢC KY_TU_SEARCH (SAU)
-            new ColumnInfoUrlCha(MA_THUOC_P, "Mã thuốc", URL_P, 20 * 256, false),
+            new ColumnInfoUrlCha(MA_THUOC_P, "Mã thuốc", P_URL, 20 * 256, false),   // Chứa Mã Link https://...key=...
             //TEN_THUOC: dùng để ghi lại ghi chú
             new ColumnInfoUrlCha(TEN_THUOC, "Tên thuốc", null, 25 * 256, true),
+            new ColumnInfoUrlCha(P_URL, "Url", null, 25 * 256, true),
             new ColumnInfoUrlCha(GHI_CHU, "Ghi chú", null, 25 * 256, true)
+            // Thêm index column
+
             //new ColumnInfo(INDEX_COLOR, "Màu dòng", null, 8 * 256, false);
     );
 
@@ -2004,27 +2069,40 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         public final String dbLinkColumnName;  // Nếu cần hyperlink
         public final int width;
         public final boolean wrapText;
-        public int columnIndex = -1;           // Gán sau khi query
-        public int linkColumnIndex = -1;
+        public int idxCol = -1;        // Sẽ gán giá sau khi query: columnIndex
+        public int idxCol_Link = -1;    // Sẽ gán giá sau khi query: linkColumnIndex
 
         public ColumnInfo(String dbColumnName, String headerName, String dbLinkColumnName, int width, boolean wrapText) {
+        //public ColumnInfo(String dbColumnName, int idxCol, String headerName, String dbLinkColumnName, int idxColLink, int width, boolean wrapText) {
             this.dbColumnName = dbColumnName;
             //this.title = title;
             this.headerName = headerName;
             this.dbLinkColumnName = dbLinkColumnName;
             this.width = width;
             this.wrapText = wrapText;
+
+            // Thêm index column: để tìm cho nhanh: kHI DUYỆT cursor CHA-CON, EXPORT_COLUMNS: ta sẽ gán giá giá trị idxCol, idxColLink
+            //this.idxCol = idxCol;       // Cột chứa giá trị value KHÔNG PHẢI LINK
+            //this.idxColLink = idxColLink;   // Cột chứa giá trị value là link
+
         }
     }
 
     public static final List<ColumnInfo> EXPORT_COLUMNS = Arrays.asList(
-            // Ý nghĩa: ColumnInfo(String dbCol, String header, String linkCol, int width, boolean wrapText)new ColumnInfo(DBHelperThuoc.PARENT_ID, "PARENT_ID", null, 12 * 256, false));    // hoặc PARENT_ID=Mã cha
-            new ColumnInfo(PARENT_ID, "PARENT_ID", null, 12 * 256, false),    // hoặc PARENT_ID=Mã cha
-            new ColumnInfo(LEVEL, "Cấp độ", null, 8 * 256, false),            // Hoặc : LEVEL
-            new ColumnInfo(KY_TU_SEARCH, "KÝ TỰ SEARCH", null, 15 * 256, false),  //"Chữ cái tìm kiếm"
+            // Ý nghĩa: ColumnInfo(String dbCol, String header, String linkCol, int width, boolean wrapText)new ColumnInfo(DBHelperThuoc.ID_URL, "ID_URL", null, 12 * 256, false));    // hoặc ID_URL=Mã cha
+
+            // Của CHA: Tự lấy index của cột sau khi lấy query CHA-CON
+//            new ColumnInfo(ID_URL, "ID_URL", null, 12 * 256, false),    // hoặc ID_URL=Mã cha
+//            new ColumnInfo(LEVEL, "Level", null, 8 * 256, false),            // Hoặc : LEVEL/Cấp độ
+//            //new ColumnInfo(MA_THUOC_P, "KÝ TỰ SEARCH", null, 15 * 256, false),  //Chỉ dùng MA_THUOC của bảng con
+//            new ColumnInfo(KY_TU_SEARCH, "KÝ TỰ SEARCH", null, 15 * 256, false),  //"Chữ cái tìm kiếm"
+
+            // Của CON:
+            // Thêm vào đầu list nếu muốn có STT
+            new ColumnInfo(null, "STT", null, 5 * 256, false),
             new ColumnInfo(MA_THUOC, "Mã thuốc", MA_THUOC_LINK, 20 * 256, false),
             new ColumnInfo(TEN_THUOC, "Tên thuốc", null, 25 * 256, true),
-            new ColumnInfo(THANH_PHAN, "Thành phần", THANH_PHAN_LINK, 25 * 256, true),
+            new ColumnInfo(THANH_PHAN, "Thành phần", THANH_PHAN_LINK, 40 * 256, true),
             new ColumnInfo(NHOM_THUOC, "Nhóm thuốc", NHOM_THUOC_LINK, 20 * 256, false),
             new ColumnInfo(DANG_THUOC, "Dạng thuốc", DANG_THUOC_LINK, 20 * 256, false),
             new ColumnInfo(SAN_XUAT, "Nhà sản xuất", SAN_XUAT_LINK, 20 * 256, true),
@@ -2033,7 +2111,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             new ColumnInfo(SDK, "Số đăng ký", SDK_LINK, 20 * 256, false),
             new ColumnInfo(CAC_THUOC, "Các thuốc cùng nhóm", CAC_THUOC_LINK, 25 * 256, true),    //nếu còn phía sau thì thêm ","
             new ColumnInfo(GHI_CHU, "Ghi chú", null, 25 * 256, true)    // Tạo cột Ghi chú cho sheet Excel
-            //new ColumnInfo(INDEX_COLOR, "Màu dòng", null, 8 * 256, false);
+
     );
 
     /*
@@ -2046,7 +2124,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         // Nếu bạn không thực sự cần các dòng Log từ cursor,
         // hãy xóa bỏ hoàn toàn phần khởi tạo Cursor để code sạch sẽ nhất:
         long count = DatabaseUtils.longForQuery(
-                db,
+                getReadableDatabase(),
                 "SELECT COUNT(*) FROM " + crawlType.getUrlQueueTableName() + " WHERE status=0",
                 null
         );
@@ -2080,7 +2158,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
      * @param errorMessage
      */
     public void updateErrorMessageException(String tableQueue, String url, int status, String errorMessage) {
-        dbWriteLock.lock();
+        dbLock.writeLock().lock();
         try {
             SQLiteDatabase db = this.getWritableDatabase();
             ContentValues values = new ContentValues();
@@ -2088,7 +2166,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
             values.put(ERR_MESSAGE, errorMessage);
             db.update(tableQueue, values, "url=?", new String[]{url});
         } finally {
-            dbWriteLock.unlock();
+            dbLock.writeLock().unlock();
         }
     }
 
@@ -2099,14 +2177,14 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
     public List<ErrorUrl> getListErrorUrls(CrawlType crawlType) {
         List<ErrorUrl> list = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.rawQuery("SELECT " + PARENT_ID + ", " + LEVEL + ", " + URL+ ", " + STATUS + ", " + ERR_MESSAGE + " FROM " + crawlType.getUrlQueueTableName() + " WHERE status=0", null);
-        //cursor = db.query(crawlType.getUrlQueueTableName(), new String[]{PARENT_ID,LEVEL, URL, STATUS, ERR_MESSAGE}, STATUS + "=?", new String[]{String.valueOf(0)}, null, null, null);
+        Cursor cursor = db.rawQuery("SELECT " + ID_URL + ", " + LEVEL + ", " + URL+ ", " + STATUS + ", " + ERR_MESSAGE + " FROM " + crawlType.getUrlQueueTableName() + " WHERE status=0", null);
+        //cursor = db.query(crawlType.getUrlQueueTableName(), new String[]{ID_URL,LEVEL, URL, STATUS, ERR_MESSAGE}, STATUS + "=?", new String[]{String.valueOf(0)}, null, null, null);
 
         if (cursor.moveToFirst()) {
             do {
                 //int id = cursor.getInt(0);
                 String url = cursor.getString(cursor.getColumnIndexOrThrow(URL));
-//                long parentId = cursor.getLong(cursor.getColumnIndexOrThrow(PARENT_ID));
+//                long parentId = cursor.getLong(cursor.getColumnIndexOrThrow(ID_URL));
 //                int level = cursor.getInt(cursor.getColumnIndexOrThrow(LEVEL));
 
                 int status = cursor.getInt(cursor.getColumnIndexOrThrow(STATUS));
@@ -2126,7 +2204,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
      * Lấy đường dẫn tuyệt đối của file .db
      */
     public String getDbPath() {
-        return context.getDatabasePath(DATABASE_NAME).getAbsolutePath();
+        return mContext.getDatabasePath(DATABASE_NAME).getAbsolutePath();
     }
 
     /**

@@ -7,7 +7,7 @@ import java.util.Date;
 
 public class UrlInfo {
     private final String url;
-    private final long parentId; // ID của URL cha trong bảng URL_QUEUE
+    private final int idUrl; // ID của URL cha trong bảng URL_QUEUE
     private final int level;
     //private final String kyTuSearch;
     private String maThuoc_P;
@@ -21,9 +21,9 @@ public class UrlInfo {
     private long last_attempt_at;
 
     // Constructor đầy đủ
-    public UrlInfo(String url, long parentId, int level, String maThuocP, int status, String ghiChu, int indexColor, int lastRecordIndex, long lastAttemptAt) {
+    public UrlInfo(String url, int idUrl, int level, String maThuocP, int status, String ghiChu, int indexColor, int lastRecordIndex, long lastAttemptAt) {
         this.url = url; // Tương đương: maThuocLinkP
-        this.parentId = parentId;
+        this.idUrl = idUrl;
         this.level = level;
         //this.kyTuSearch = kyTuSearch != null?kyTuSearch:""; // Sẽ lấy từ url
         this.maThuoc_P = maThuocP;
@@ -42,7 +42,7 @@ public class UrlInfo {
 
     public String getUrl() { return url; }
 
-    public long getParentId() { return parentId; }
+    public int getParentId() { return idUrl; }
     public int getLevel() { return level; }
     //public String getKyTuSearch(){ return kyTuSearch; }
     public String getMaThuoc_P(){ return maThuoc_P; }

@@ -35,7 +35,7 @@ public class ExportProgressActivity extends AppCompatActivity {
         }
 
         CrawlType crawlType = new  SettingsRepository(this.getApplicationContext()).getSelectedCrawlType();
-        SQLiteDatabase db = DBHelperThuoc_Old.getInstance(this.getApplicationContext()).getReadableDatabase();
+        SQLiteDatabase db = DBHelperThuoc.getInstance(this.getApplicationContext()).getReadableDatabase();
         /////
 //        //Cursor cursor = db.query(crawlType.getOldTableThuocName(), String[] {count(*)],)
 //        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + crawlType.getTableThuocName(), null);
@@ -59,7 +59,7 @@ public class ExportProgressActivity extends AppCompatActivity {
         boolean isXmlExport = intent.getBooleanExtra(AppConstants.EXPORT_TYPE, false);
 
         // Bắt đầu export
-        exportViewModel.exportToExcel(isXmlExport, DBHelperThuoc_Old.getInstance(this.getApplicationContext()),
+        exportViewModel.exportToExcel(isXmlExport, DBHelperThuoc.getInstance(this.getApplicationContext()),
                 tableName, nameFileExcel);
 
         exportStartTime = System.currentTimeMillis();

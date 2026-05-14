@@ -2,7 +2,7 @@ package com.example.crawlertbdgemini2modibasicview;
 
 public class ThuocSQLite {
     // Thuộc tính liên quan đến nguồn gốc URL của thuốc
-    public Integer url_id;              // (1) Đây là KHÓA NGOẠI THAM CHIẾU DẾN id của TABLE CHA
+    public Integer id_url;              // (1) Đây là KHÓA NGOẠI THAM CHIẾU DẾN id của TABLE CHA
     //public long parent_id;              // (2) PARENT_ID_OF_CRAWLED_URL trong DB
     //public int level;                   // (3) LEVEL_OF_CRAWLED_URL trong DB
     //public String ky_tu_search;         // (4)  KY_TU_SEARCH. BẢNG CON ĐÃ BỎ

@@ -19,6 +19,7 @@ import com.example.crawlertbdgemini2modibasicview.utils.Utils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -29,14 +30,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ExecutorService;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 public class ExcelExporterOptimized {
 
     private static final String TAG = "ExcelExporterOptimized";
-    private static ThreadPoolExecutor excelExecutor;
+    private static ExecutorService excelExecutor;
     private static Context applicationContext;
 
     // Định nghĩa các STYLE_INDEX từ styles.xml của bạn
@@ -68,7 +69,7 @@ public class ExcelExporterOptimized {
     // Kích thước lô dữ liệu đọc từ DB mỗi lần
     private static final int BATCH_SIZE = 1000;
 
-    public ExcelExporterOptimized(ThreadPoolExecutor executor, Context context) {
+    public ExcelExporterOptimized(ExecutorService executor, Context context) {
         excelExecutor = executor;
         applicationContext = context.getApplicationContext();
     }
@@ -99,7 +100,7 @@ public class ExcelExporterOptimized {
 
         try {
             // Mở kết nối cơ sở dữ liệu MỘT LẦN duy nhất cho toàn bộ quá trình xuất
-            db = DBHelperThuoc_Old.getInstance(context).getReadableDatabase();
+            db = DBHelperThuoc.getInstance(context).getReadableDatabase();
             Log.d(TAG, "Database opened in exportExcelSmart.");
 
             // Đếm tổng số hàng (Sử dụng Cursor cục bộ và đóng ngay)
@@ -114,7 +115,8 @@ public class ExcelExporterOptimized {
             // BẮT ĐẦU XUẤT exportToExcelXML TẠO FILE EXCEL
             if (isXmlExport) {
                 // Truyền đối tượng db đã mở xuống phương thức con
-                exportToExcelXML(db, context, tableThuoc, excelFileName, totalRecordsInDb, callbacks);
+                File exportFile = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), excelFileName);
+                exportToExcelXML(db, context, tableThuoc, exportFile, totalRecordsInDb, callbacks);
             } else {
                 boolean useStreaming = totalRecordsInDb > 10000;
                 exportDataToExcel(db, context, callbacks, useStreaming);
@@ -134,19 +136,26 @@ public class ExcelExporterOptimized {
     }
 
     /**
+     * Phương thức mới hỗ trợ gọi từ ViewModel với File object.
+     */
+    public void exportDataToExcelXlsx(Context context, SQLiteDatabase db, String tableName, File file, ExportCallbacks callbacks) {
+        int totalRecords = (int) DatabaseUtils.queryNumEntries(db, tableName);
+        exportToExcelXML(db, context, tableName, file, totalRecords, callbacks);
+    }
+
+    /**
      * Phương thức xuất dữ liệu vào file Excel (XML/ZIP).
      * Nhận đối tượng SQLiteDatabase đã mở từ phương thức gọi.
      *
      * @param db Đối tượng SQLiteDatabase đã được mở.
      * @param context Context của ứng dụng.
      * @param tableThuoc Tên bảng cần xuất.
-     * @param excelFileName Tên file Excel.
+     * @param exportFile Đối tượng File để lưu kết quả.
      * @param totalRecordsInDb Tổng số bản ghi trong DB (để tính tiến độ).
      * @param callbacks Callback để báo cáo trạng thái.
      */
-    public static void exportToExcelXML(SQLiteDatabase db, Context context, String tableThuoc, String excelFileName, int totalRecordsInDb, ExportCallbacks callbacks) {
+    public static void exportToExcelXML(SQLiteDatabase db, Context context, String tableThuoc, File exportFile, int totalRecordsInDb, ExportCallbacks callbacks) {
         try {
-            File exportFile = new File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), excelFileName);
             ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(exportFile));
 
             writeContentTypes(zos);
@@ -192,12 +201,12 @@ public class ExcelExporterOptimized {
         String tableThuocCon = crawlType.getTableThuocName();   // Alias: Bảng con
         String tableUrlsParent;                                 // Alias: Bảng Cha
         if (crawlType.getSettingIdName().endsWith("2kt")) {
-            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_2KT;
+            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_2KT;
 
         } else if (crawlType.getSettingIdName().endsWith("3kt")) {
-            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_3KT;
+            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_3KT;
         } else {
-            tableUrlsParent = DBHelperThuoc_Old.TABLE_PARENT_URLS_CUSTOM;
+            tableUrlsParent = DBHelperThuoc.TABLE_PARENT_URLS_CUSTOM;
         }
 
         // Các cấu trúc dữ liệu toàn cục cho quá trình xuất (chia sẻ giữa các sheet)
@@ -210,9 +219,10 @@ public class ExcelExporterOptimized {
         List<String> hyperlinkCellRefs = new ArrayList<>();
         List<String> mergeCells = new ArrayList<>();
 
-        int currentSheetIndex = 1; // Chỉ số của sheet hiện tại (1-indexed)
-        int currentRowInSheet = 1; // Số dòng hiện tại trong sheet (1-indexed, bao gồm cả headers)
-        int totalExportedRecords = 0; // Tổng số bản ghi đã xuất ra (chỉ đếm data rows)
+        int IdxSheet = 1; // Chỉ số của sheet hiện tại (1-indexed)
+        int recordCount = 0;    // Mục đích phân trang excel. Cũng là tổng record đã ghi ra excel (chỉ đếm data rows)
+        int rowE = 6; // Dòng bắt đầu trong sheet hiện tại. (1-indexed, bao gồm cả headers) Ghi record bắt đầu là 5: Sau tiêu đề, ngày tạo, ngày cập nhật, header (4 dòng)
+
         int lastPercent = 0;
 
         // Lấy MIN và MAX date một lần duy nhất
@@ -222,11 +232,11 @@ public class ExcelExporterOptimized {
         //
         // Chuẩn bị danh sách tất cả các cột cần truy vấn
         List<String> allColumns = new ArrayList<>();
-        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
+        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
             allColumns.add(col.dbColumnName);
             if (col.dbLinkColumnName != null) allColumns.add(col.dbLinkColumnName);
         }
-        allColumns.add(DBHelperThuoc_Old.INDEX_COLOR);
+        allColumns.add(DBHelperThuoc.INDEX_COLOR);
         String queryCols = TextUtils.join(", ", allColumns);
 
         // --- Khởi tạo sheet đầu tiên với tiêu đề và header ---
@@ -234,70 +244,138 @@ public class ExcelExporterOptimized {
         //sheetView(sheetContent, 1);   //Sheet1: active
         // writeInitialSheetHeaders: tạo 5 hàng. // Từ A1 đên dòng tiêu đề (A5): 5 dòng
         writeInitialSheetHeaders(sheetContent, sharedStringsMap, sharedStringList, mergeCells, minDate, maxDate);
-        currentRowInSheet = 6; // Ghi record bắt đầu là 5: Sau tiêu đề, ngày tạo, ngày cập nhật, header (4 dòng)
-        int lastUrlId = -1;
 
-        // === Vòng lặp chính để đọc dữ liệu theo lô và ghi vào sheet ===
-        int offset = 0;
-        // Khai báo Map để lưu trữ chỉ mục cột MỘT LẦN DUY NHẤT
-        Map<String, Integer> cursorColumnIndices = new HashMap<>();
-        int colorIndex = -1; // Khởi tạo với giá trị không hợp lệ
+
+        // 1. Truy vấn dữ liệu kết hợp bảng cha và bảng con (LEFT JOIN): có LIMIT 1 để tìm chỉ mục cột 1 lần cho nhanh
+        StringBuilder sb_limit1 = new StringBuilder();
+        sb_limit1.append("SELECT\n")
+                // CHA - Sử dụng alias rõ ràng để tránh xung đột tên cột
+                .append("p.").append(DBHelperThuoc.ID).append(" AS p_id,\n")
+                .append("p.").append(DBHelperThuoc.ID_URL).append(" AS id_url,\n")
+                .append("p.").append(DBHelperThuoc.LEVEL).append(" AS p_level,\n")
+                .append("p.").append(DBHelperThuoc.URL).append(" AS p_url,\n")         //.append(DBHelperThuoc.URL_P).append(",\n")
+
+                .append("p.").append(DBHelperThuoc.GHI_CHU).append(" AS p_ghi_chu,\n")
+                .append("p.").append(DBHelperThuoc.INDEX_COLOR).append(" AS p_index_color,\n")    // KHÔNG GHI EXCEL
+                .append("p.").append(DBHelperThuoc.LAST_UPDATED).append(" AS p_last_updated,\n")
+
+                // CON
+                .append("c.").append(DBHelperThuoc.MA_THUOC).append(",\n")
+                .append("c.").append(DBHelperThuoc.MA_THUOC_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.TEN_THUOC).append(",\n")
+                .append("c.").append(DBHelperThuoc.THANH_PHAN).append(",\n")
+                .append("c.").append(DBHelperThuoc.THANH_PHAN_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.NHOM_THUOC).append(",\n")
+                .append("c.").append(DBHelperThuoc.NHOM_THUOC_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.DANG_THUOC).append(",\n")
+                .append("c.").append(DBHelperThuoc.DANG_THUOC_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.SAN_XUAT).append(",\n")
+                .append("c.").append(DBHelperThuoc.SAN_XUAT_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.DANG_KY).append(",\n")
+                .append("c.").append(DBHelperThuoc.DANG_KY_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.PHAN_PHOI).append(",\n")
+                .append("c.").append(DBHelperThuoc.PHAN_PHOI_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.SDK).append(",\n")
+                .append("c.").append(DBHelperThuoc.SDK_LINK).append(",\n")
+                .append("c.").append(DBHelperThuoc.CAC_THUOC).append(",\n")
+                .append("c.").append(DBHelperThuoc.CAC_THUOC_LINK).append("\n")
+
+                .append("FROM ").append(tableUrlsParent).append(" p\n")
+                .append("LEFT JOIN ").append(tableThuocCon).append(" c\n")
+                .append(" ON p.id = c.url_id\n")
+
+                // Chỉ lấy 1 dòng để trích xuất index cột, không cần sắp xếp tốn CPU
+                .append("LIMIT 1");
+
+        String metadataQuery = sb_limit1.toString();
+
+        // Hoặc dùng biến array: đễ duyệt vòng lặp
+        ArrayList<Integer> colCha = new ArrayList<>(); // Thêm "= new ArrayList<>()" để khởi tạo
+
+        int idx_Color = -1; // Khởi tạo với giá trị không hợp lệ
+        int idx_p_url = -1;
         int rawColor = 0;
 
-        // Truy vấn dữ liệu kết hợp bảng cha và bảng con (LEFT JOIN)
-        //DBHelperThuoc.URL_ID = url_id
+        try (Cursor c = db.rawQuery(metadataQuery, null)) {
+            if (c.moveToFirst()) {
+                // Lấy index cột cha vào biên array
+                colCha.add(c.getColumnIndex("p_id"));
+                colCha.add(c.getColumnIndex("id_url"));
+                colCha.add(c.getColumnIndex("p_level"));
+                colCha.add(c.getColumnIndex("p_url"));  //chứa url
+                colCha.add(c.getColumnIndex("p_ghi_chu"));
+
+                idx_Color = c.getColumnIndex("p_index_color");  // Lấy theo Alias bảng CHA
+                idx_p_url = c.getColumnIndex("p_url");
+
+                // Gán index cho EXPORT_COLUMNS MỘT LẦN DUY NHẤT
+                for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+                    if (col.dbColumnName != null) {
+                        col.idxCol = c.getColumnIndex(col.dbColumnName);
+                    } else {
+                        col.idxCol = -1;
+                    }
+                    if (col.dbLinkColumnName != null) {
+                        col.idxCol_Link = c.getColumnIndex(col.dbLinkColumnName);
+                    } else {
+                        col.idxCol_Link = -1;
+                    }
+                }
+            }
+        }
+
+        Log.d(TAG, "Column indices initialized in DBHelperThuoc.EXPORT_COLUMNS and colCha.");
+
+        // 2. Truy vấn dữ liệu kết hợp bảng cha và bảng con (LEFT JOIN): để duyệt lấy dữ liệu
+        //DBHelperThuoc.ID_URL = url_id
         StringBuilder sb = new StringBuilder();
         sb.append("SELECT\n")
         //CHA
-        .append("p").append(".").append(DBHelperThuoc_Old.ID).append(" AS url_id,\n")    // CẦN
-        //.append("p").append("." + DBHelperThuoc.PARENT_ID + " AS p_parent_id,\n")
-        .append("p").append("." + DBHelperThuoc_Old.PARENT_ID + " AS parent_id,\n") // NOT NULL
+        .append("p.").append(DBHelperThuoc.ID).append(" AS p_id,\n")    // CẦN
+        //.append("p.").append(DBHelperThuoc.ID_URL + " AS p_parent_id,\n")
+        .append("p.").append(DBHelperThuoc.ID_URL).append(" AS id_url,\n")  // Là Long. NOT NULL.
 
-        //.append("p").append("." + DBHelperThuoc.LEVEL + " AS p_level,\n")
-        .append("p").append("." + DBHelperThuoc_Old.LEVEL + ",\n")                  // NOT NULL
-        //.append("p").append("." + DBHelperThuoc.URL_P + " AS url_p,\n") // link
-        .append("p").append("." + DBHelperThuoc_Old.URL + " AS " + DBHelperThuoc_Old.URL_P + ",\n")    // link cha: KHÔNG THỂ NULL
-                .append("p").append("." + DBHelperThuoc_Old.MA_THUOC + " AS " + DBHelperThuoc_Old.MA_THUOC_P + ",\n")   // Giả: lấy từ url
+        .append("p.").append(DBHelperThuoc.LEVEL).append(" AS p_level,\n")  // Là int. NOT NULL
+        //.append("p.").append(DBHelperThuoc.LEVEL + ",\n")                  // NOT NULL
+        //.append("p.").append(DBHelperThuoc.URL_P + " AS url_p,\n") // link
+        .append("p.").append(DBHelperThuoc.P_URL).append(" AS p_url, \n ")       // + DBHelperThuoc.URL_P + ",\n")    // link cha: KHÔNG THỂ NULL: TẠO Ma THUOC
+        // .append("p.").append(DBHelperThuoc.MA_THUOC + " AS " + DBHelperThuoc.MA_THUOC_P + ",\n")   // Giả: lấy "tinh gon" từ p_url
 
-        //.append("p").append("." + DBHelperThuoc.GHI_CHU + " AS p_ghi_chu,\n")
-        .append("p").append("." + DBHelperThuoc_Old.GHI_CHU + ",\n")
-        //.append("p").append("." + DBHelperThuoc.INDEX_COLOR + " AS p_index_color,\n")
-        .append("p").append("." + DBHelperThuoc_Old.INDEX_COLOR + ",\n")
-        //.append("p").append("." + DBHelperThuoc.LAST_UPDATED + " AS p_last_updated,\n");
-        .append("p").append("." + DBHelperThuoc_Old.LAST_UPDATED + ",\n");
+        .append("p.").append(DBHelperThuoc.GHI_CHU).append(" AS p_ghi_chu,\n")   // NẰM CỘT TÊN THUỐC
+
+        .append("p.").append(DBHelperThuoc.INDEX_COLOR).append(" AS p_index_color,\n")   //KHÔNG GHI EXCEL
+        .append("p.").append(DBHelperThuoc.LAST_UPDATED).append(" AS p_last_updated,\n");    //KHÔNG GHI EXCEL
 
         //CON
-            // VẪN LẤY PARENT_ID, LEVEL VÌ MỤC ĐÍCH XẮP XẾP EXCEL: NẾU BỎ SẼ LẤY GIÁ TRỊ TỪ BẢNG CHA
-        //sb.append("c").append(".").append(DBHelperThuoc.PARENT_ID).append(",\n");   // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
+            // VẪN LẤY ID_URL, LEVEL VÌ MỤC ĐÍCH XẮP XẾP EXCEL: NẾU BỎ SẼ LẤY GIÁ TRỊ TỪ BẢNG CHA
+        //sb.append("c").append(".").append(DBHelperThuoc.ID_URL).append(",\n");   // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
         //sb.append("c").append("." + DBHelperThuoc.LEVEL + ",\n");           // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
         //sb.append("c").append("." + DBHelperThuoc.KY_TU_SEARCH + ",\n");    // LẤY TỪ URL
-        sb.append("c").append("." + DBHelperThuoc_Old.MA_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.MA_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.TEN_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.THANH_PHAN + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.THANH_PHAN_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.NHOM_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.NHOM_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.DANG_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.DANG_THUOC_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.SAN_XUAT + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.SAN_XUAT_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.DANG_KY + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.DANG_KY_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.PHAN_PHOI + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.PHAN_PHOI_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.SDK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.SDK_LINK + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.CAC_THUOC + ",\n");
-        sb.append("c").append("." + DBHelperThuoc_Old.CAC_THUOC_LINK + "\n");
-        //sb.append("c").append("." + DBHelperThuoc.GHI_CHU + ",\n"); // CÓ THỂ KHÔNG CẦN VÌ CHA ĐẪ CÓ, SẼ CẤU HÌNH LẠI TABLE THUOC CON
-        //sb.append("c").append("." + DBHelperThuoc.INDEX_COLOR + "\n");
+        sb.append("c.").append(DBHelperThuoc.MA_THUOC + ",\n");    //Lấy chính
+        sb.append("c.").append(DBHelperThuoc.MA_THUOC_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.TEN_THUOC + ",\n");
+        sb.append("c.").append(DBHelperThuoc.THANH_PHAN + ",\n");
+        sb.append("c.").append(DBHelperThuoc.THANH_PHAN_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.NHOM_THUOC + ",\n");
+        sb.append("c.").append(DBHelperThuoc.NHOM_THUOC_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.DANG_THUOC + ",\n");
+        sb.append("c.").append(DBHelperThuoc.DANG_THUOC_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.SAN_XUAT + ",\n");
+        sb.append("c.").append(DBHelperThuoc.SAN_XUAT_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.DANG_KY + ",\n");
+        sb.append("c.").append(DBHelperThuoc.DANG_KY_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.PHAN_PHOI + ",\n");
+        sb.append("c.").append(DBHelperThuoc.PHAN_PHOI_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.SDK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.SDK_LINK + ",\n");
+        sb.append("c.").append(DBHelperThuoc.CAC_THUOC + ",\n");
+        sb.append("c.").append(DBHelperThuoc.CAC_THUOC_LINK + "\n");
 
         sb.append("FROM ").append(tableUrlsParent).append(" p\n"); //p là alias của  tableUrlsParent
         sb.append("LEFT JOIN ").append(tableThuocCon).append(" c\n")            //c là alias của tableThuocCon
-                .append(" ON ").append("p").append(".id = ")     // alias parent_id=id cha
+                .append(" ON ").append("p").append(".id = ")     // alias id_url=id cha
                 .append("c").append(".url_id \n");
-        sb.append("ORDER BY ").append("p").append(".parent_id ASC, ")
+        sb.append("ORDER BY ").append("p").append(".id_url ASC, ")
                 .append("p").append(".level ASC \n")
                 .append("LIMIT ? OFFSET ?");
 
@@ -310,318 +388,92 @@ public class ExcelExporterOptimized {
 //        db.execSQL(createNewTable);
         ///
 
-        while (true) {
-            Cursor cursor = null;
-            try {
-                // Truy vấn dữ liệu theo lô
-//                String batchQuery = "SELECT " + queryCols + " FROM " + tableThuoc +
-//                        " ORDER BY " + DBHelperThuoc.PARENT_ID + ", " + DBHelperThuoc.LEVEL +
-//                        " LIMIT " + BATCH_SIZE + " OFFSET " + offset;
-
-                //String batchQuery = // Sử dụng đối số cho LIMIT và OFFSET
-                cursor = db.rawQuery(batchQuery, new String[]{String.valueOf(BATCH_SIZE), String.valueOf(offset)});
-
-                Log.d(TAG, "Executing batch query: " + batchQuery);
-
-                if (cursor.getCount() == 0) {
-                    Log.d(TAG, "No more records in batch. Breaking loop.");
-                    break; // Hết dữ liệu
-                }
-
-                // Lấy chỉ mục cột từ Cursor CHỈ MỘT LẦN (khi xử lý lô đầu tiên)
-                if (cursorColumnIndices.isEmpty()) { // Kiểm tra nếu chưa được khởi tạo
-                    for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
-                        cursorColumnIndices.put(col.dbColumnName, cursor.getColumnIndex(col.dbColumnName));
-                        if (col.dbLinkColumnName != null) {
-                            cursorColumnIndices.put(col.dbLinkColumnName, cursor.getColumnIndex(col.dbLinkColumnName));
-                        }
-                    }
-                    colorIndex = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
-                    Log.d(TAG, "Column indices initialized for the first batch.");
-                }
-
-                int colorIndexCha = -1; // Khởi tạo với giá trị không hợp lệ
-                //colorIndexCha = cursor.getColumnIndex(p_ALIAS_INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
-                colorIndexCha = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);  // Lấy theo Tham chiếu bảng CHA
-                // Duyệt qua từng record trong lô hiện tại
-                if (cursor.moveToFirst()) {
-                    do {
-                        // Kiểm tra xem có cần tạo sheet mới không (phân trang)
-                        // currentRowInSheet - 1 để loại bỏ 3 dòng header cố định và tính toán cho dòng dữ liệu
-                        if ((currentRowInSheet - 1) % ROWS_PER_PAGINATION_SHEET == 0 && currentRowInSheet > 1) {
-                            Log.d(TAG, "Max rows reached for sheet " + currentSheetIndex + ". Finalizing sheet.");
-                            // ✅ KẾT THÚC SHEET HIỆN TẠI VÀ GHI VÀO ZIP
-                            writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, currentSheetIndex, mergeCells);
-                            currentSheetIndex++; // Tăng chỉ số sheet
-
-                            // Reset các biến cho sheet mới
-                            hyperlinks.clear();
-                            hyperlinkCellRefs.clear();
-                            mergeCells.clear();
-                            sheetContent.setLength(0);
-
-                            // ✅ Khởi tạo sheet mới với tiêu đề và header
-                            // FREEZE SHEET KHÔNG ACTIVE:
-                            initNewSheetXml(sheetContent, -1);  //-1 hoặc currentSheetIndex
-                            //sheetView(sheetContent, -1);   //-1 hoặc currentSheetIndex
-                            // writeInitialSheetHeaders:  Từ A1 đên dòng tiêu đề (A5): 5 dòng
-                            writeInitialSheetHeaders(sheetContent, sharedStringsMap, sharedStringList, mergeCells, minDate, maxDate); // Chiếm 4 Row (0-4)
-                            currentRowInSheet = 6; // Sau tiêu đề, ngày tạo, ngày cập nhật, header (5 dòng)
-
-                            Log.d(TAG, "New sheet " + currentSheetIndex + " initialized with headers.");
-                        }
-
-                        // Lấy dữ liệu từ kết quả JOIN
-                        // Các thông số từ cột cha
-                        int urlId = cursor.getInt(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_ID));
-                        //String url = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc.URL_P));
-                        //String url = cursor.getString(cursor.getColumnIndexOrThrow(p_ALIAS_URL));
-                        //String createdAt = cursor.getString(cursor.getColumnIndex("created_at"));
-                        String errMessage = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.GHI_CHU));
-                        //String errMessage = cursor.getString(cursor.getColumnIndexOrThrow(p_ALIAS_GHI_CHU));
-                        rawColor = cursor.isNull(colorIndexCha) ? 0 : cursor.getInt(colorIndexCha);
-
-                        // Nếu là dòng đầu tiên của một URL mới, ghi thông tin bảng cha
-                        if (urlId != lastUrlId) {
-                            // Ghi thông tin bảng cha
-                            // Ghi dữ liệu của hàng hiện tại vào sheetContent
-                            writeRowCha(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS_CHA,
-                                    sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, colorIndexCha);
-
-//                            writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc.EXPORT_COLUMNS,
-//                                    sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor, cursorColumnIndices);
-
-//                            tableUrlsParent + "." + DBHelperThuoc.ID + " AS url_id, " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.PARENT_ID +", " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.LEVEL +", " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.URL +", " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.GHI_CHU +", " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.INDEX_COLOR +", " +
-//                                    tableUrlsParent + "." + DBHelperThuoc.LAST_UPDATED +", " +
-                            currentRowInSheet++; // Tăng 1 dòng CHO HÀNG SAU trong sheet
-                        }
-                        // Ghi dữ liệu của hàng hiện tại (con) vào sheetContent: rawColor= 0: CÁC HÀNG CON KHÔNG TÔ MÀU
-                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS,
-                                sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, colorIndex, cursorColumnIndices);
-                        currentRowInSheet++; // Tăng 1 dòng CHO HÀNG SAU trong sheet
-                        totalExportedRecords++; // Tăng tổng số bản ghi đã xuất
-
-                        // Cập nhật tiến độ
-                        int percent = (int) (totalExportedRecords * 100.0 / (totalRecordsInDb == 0 ? 1 : totalRecordsInDb));
-                        if (callbacks != null && percent > lastPercent) {
-                            callbacks.onExportProgress(percent);
-                            lastPercent = percent;
-                        }
-
-                        lastUrlId = urlId;  // Cập nhật lastUrlId để theo dõi URL mới
-
-                    } while (cursor.moveToNext());
-                }
-
-                offset += BATCH_SIZE; // Tăng offset cho lô tiếp theo
-
-            } catch (Exception e) {
-                Log.e(TAG, "❌ Error processing batch at offset " + offset + ": " + e.getMessage(), e);
-                throw e; // Ném lại để bắt ở cấp trên
-            } finally {
-                if (cursor != null) {
-                    cursor.close(); // Đóng Cursor sau mỗi lô
-                    Log.d(TAG, "Cursor for batch at offset " + offset + " closed.");
-                }
-            }
-        } // End while loop for batches
-
-        // ✅ Ghi sheet cuối cùng (sau khi tất cả các lô đã được xử lý)
-        // Chỉ ghi nếu có dữ liệu trong sheet cuối cùng hoặc nếu đây là sheet đầu tiên và không có record nào
-        if (totalExportedRecords > 0 || currentSheetIndex == 1) {
-            Log.d(TAG, "Finalizing last sheet " + currentSheetIndex + ".");
-            writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, currentSheetIndex, mergeCells);
-        } else {
-            Log.d(TAG, "No records exported, and no initial sheet written. Skipping final sheet write.");
-        }
-
-
-        // ✅ Ghi sharedStrings.xml (sau khi tất cả các sheet đã được xử lý)
-        if (!sharedStringList.isEmpty()) {
-            StringBuilder shared = new StringBuilder();
-            shared.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
-            shared.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"")
-                    .append(sharedStringList.size()).append("\" uniqueCount=\"").append(sharedStringList.size()).append("\">\n");
-            for (String s : sharedStringList)
-                shared.append("<si><t>").append(s).append("</t></si>\n");    // escapeXml(s) đã escapeXml trong writeCell
-            shared.append("</sst>\n");
-
-            zos.putNextEntry(new ZipEntry("xl/sharedStrings.xml"));
-            zos.write(shared.toString().getBytes(StandardCharsets.UTF_8));
-            zos.closeEntry();
-            Log.d(TAG, "sharedStrings.xml written.");
-            // --- DEBUG: Print sharedStrings.xml content ---
-            System.out.println("--- sharedStrings.xml Content ---");
-            System.out.println(shared);
-            System.out.println("---------------------------------");
-        } else {
-            // Ghi sharedStrings.xml rỗng nếu không có chuỗi nào
-            zos.putNextEntry(new ZipEntry("xl/sharedStrings.xml"));
-            zos.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"0\" uniqueCount=\"0\"/>\n".getBytes(StandardCharsets.UTF_8));
-            zos.closeEntry();
-            Log.d(TAG, "Empty sharedStrings.xml written.");
-            // --- DEBUG: Print empty sharedStrings.xml content ---
-            System.out.println("--- sharedStrings.xml (Empty) Content ---");
-            System.out.println("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"0\" uniqueCount=\"0\"/>\n");
-            System.out.println("-----------------------------------------");
-        }
-
-        return currentSheetIndex; // Trả về số sheet thực tế đã ghi
-    }
-    // MỚI: xuất excel theo quan hệ cha-con
-
-    /** GỐC CHẠY ỔN ĐỊNH
-     * Phương thức ghi dữ liệu vào sheet và shared strings, hỗ trợ phân trang và xử lý theo lô.
-     * Nhận đối tượng SQLiteDatabase đã mở từ phương thức gọi.
-     *
-     * @param db Đối tượng SQLiteDatabase đã được mở.
-     * @param context Context của ứng dụng.
-     * @param tableThuoc Tên bảng cần xuất.
-     * @param zos ZipOutputStream để ghi dữ liệu.
-     * @param totalRecordsInDb Tổng số bản ghi trong DB (để tính tiến độ).
-     * @param callbacks Callback để báo cáo trạng thái.
-     * @return Số lượng sheet đã ghi.
-     */
-    public static int writeSheetData(SQLiteDatabase db, Context context,
-                                     String tableThuoc, ZipOutputStream zos, int totalRecordsInDb, ExportCallbacks callbacks) throws Exception {
-        // Các cấu trúc dữ liệu toàn cục cho quá trình xuất (chia sẻ giữa các sheet)
-        Map<String, Integer> sharedStringsMap = new HashMap<>();
-        List<String> sharedStringList = new ArrayList<>();
-
-        // Các cấu trúc dữ liệu cục bộ cho từng sheet
-        StringBuilder sheetContent = new StringBuilder();
-        List<String> hyperlinks = new ArrayList<>();
-        List<String> hyperlinkCellRefs = new ArrayList<>();
-        List<String> mergeCells = new ArrayList<>();
-
-        int currentSheetIndex = 1; // Chỉ số của sheet hiện tại (1-indexed)
-        int currentRowInSheet = 1; // Số dòng hiện tại trong sheet (1-indexed, bao gồm cả headers)
-        int totalExportedRecords = 0; // Tổng số bản ghi đã xuất ra (chỉ đếm data rows)
-        int lastPercent = 0;
-
-        // Lấy MIN và MAX date một lần duy nhất
-        String minDate = getMinOrMaxDate(db, tableThuoc, "MIN");
-        String maxDate = getMinOrMaxDate(db, tableThuoc, "MAX");
-        Log.d(TAG, "Min Date: " + minDate + ", Max Date: " + maxDate);
-
-        // Chuẩn bị danh sách tất cả các cột cần truy vấn
-        List<String> allColumns = new ArrayList<>();
-        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
-            allColumns.add(col.dbColumnName);
-            if (col.dbLinkColumnName != null) allColumns.add(col.dbLinkColumnName);
-        }
-        allColumns.add(DBHelperThuoc_Old.INDEX_COLOR);
-        String queryCols = TextUtils.join(", ", allColumns);
-
-        // --- Khởi tạo sheet đầu tiên với tiêu đề và header ---
-        initNewSheetXml(sheetContent, 1);   //Sheet1: active
-        //sheetView(sheetContent, 1);   //Sheet1: active
-        // writeInitialSheetHeaders: tạo 5 hàng. // Từ A1 đên dòng tiêu đề (A5): 5 dòng
-        writeInitialSheetHeaders(sheetContent, sharedStringsMap, sharedStringList, mergeCells, minDate, maxDate);
-        currentRowInSheet = 6; // Ghi record bắt đầu là 5: Sau tiêu đề, ngày tạo, ngày cập nhật, header (4 dòng)
-
         // === Vòng lặp chính để đọc dữ liệu theo lô và ghi vào sheet ===
         int offset = 0;
-        // Khai báo Map để lưu trữ chỉ mục cột MỘT LẦN DUY NHẤT
-        Map<String, Integer> cursorColumnIndices = new HashMap<>();
-        int colorIndex = -1; // Khởi tạo với giá trị không hợp lệ
-        int rawColor = 0;
-
+        int last_p_Id = -1;
+        // recordCount nên dùng để đếm tổng số bản ghi (mục đích báo phần trăm tiến độ)
+        // Để ngắt trang chính xác, nên dùng số dòng thực tế trong sheet
         while (true) {
-            Cursor cursor = null;
-            try {
-                // Truy vấn dữ liệu theo lô
-                String batchQuery = "SELECT " + queryCols + " FROM " + tableThuoc +
-                        " ORDER BY " + DBHelperThuoc_Old.PARENT_ID + ", " + DBHelperThuoc_Old.LEVEL +
-                        " LIMIT " + BATCH_SIZE + " OFFSET " + offset;
-                cursor = db.rawQuery(batchQuery, null);
+            try (Cursor cursor = db.rawQuery(batchQuery, new String[]{String.valueOf(BATCH_SIZE), String.valueOf(offset)})){
                 Log.d(TAG, "Executing batch query: " + batchQuery);
 
-                if (cursor.getCount() == 0) {
+                if (!cursor.moveToFirst()) {
                     Log.d(TAG, "No more records in batch. Breaking loop.");
                     break; // Hết dữ liệu
                 }
 
-                // Lấy chỉ mục cột từ Cursor CHỈ MỘT LẦN (khi xử lý lô đầu tiên)
-                if (cursorColumnIndices.isEmpty()) { // Kiểm tra nếu chưa được khởi tạo
-                    for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
-                        cursorColumnIndices.put(col.dbColumnName, cursor.getColumnIndex(col.dbColumnName));
-                        if (col.dbLinkColumnName != null) {
-                            cursorColumnIndices.put(col.dbLinkColumnName, cursor.getColumnIndex(col.dbLinkColumnName));
-                        }
-                    }
-                    colorIndex = cursor.getColumnIndex(DBHelperThuoc_Old.INDEX_COLOR);
-                    Log.d(TAG, "Column indices initialized for the first batch.");
-                }
-
                 // Duyệt qua từng record trong lô hiện tại
-                if (cursor.moveToFirst()) {
-                    do {
-                        // Kiểm tra xem có cần tạo sheet mới không (phân trang)
-                        // currentRowInSheet - 1 để loại bỏ 3 dòng header cố định và tính toán cho dòng dữ liệu
-                        if ((currentRowInSheet - 1) % ROWS_PER_PAGINATION_SHEET == 0 && currentRowInSheet > 1) {
-                            Log.d(TAG, "Max rows reached for sheet " + currentSheetIndex + ". Finalizing sheet.");
-                            // ✅ KẾT THÚC SHEET HIỆN TẠI VÀ GHI VÀO ZIP
-                            writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, currentSheetIndex, mergeCells);
-                            currentSheetIndex++; // Tăng chỉ số sheet
+                do {
+                    // Xác định xem record này sẽ tốn bao nhiêu dòng Excel
+                    int p_id = cursor.getInt(colCha.get(0));
+                    //int rowsNeededForThisRecord = (p_id != last_p_Id) ? 2 : 1;
 
-                            // Reset các biến cho sheet mới
-                            hyperlinks.clear();
-                            hyperlinkCellRefs.clear();
-                            mergeCells.clear();
-                            sheetContent.setLength(0);
+                    // KIỂM TRA NGẮT TRANG:
+                    // Nếu số dòng hiện tại + số dòng sắp ghi vượt quá giới hạn
+                    //if (rowE + rowsNeededForThisRecord > ROWS_PER_PAGINATION_SHEET + 5) { // +5 là bù cho header. ĐK Cũ
 
-                            // ✅ Khởi tạo sheet mới với tiêu đề và header
-                            // FREEZE SHEET KHÔNG ACTIVE:
-                            initNewSheetXml(sheetContent, -1);  //-1 hoặc currentSheetIndex
-                            //sheetView(sheetContent, -1);   //-1 hoặc currentSheetIndex
-                            // writeInitialSheetHeaders:  Từ A1 đên dòng tiêu đề (A5): 5 dòng
-                            writeInitialSheetHeaders(sheetContent, sharedStringsMap, sharedStringList, mergeCells, minDate, maxDate); // Chiếm 4 Row (0-4)
-                            currentRowInSheet = 6; // Sau tiêu đề, ngày tạo, ngày cập nhật, header (5 dòng)
+                    // ĐK mới: con số ROWS_PER_PAGINATION_SHEET (ví dụ 5000) không còn là "điểm dừng cứng" mà là "ngưỡng bắt đầu xem xét ngắt trang".
+                    // 1. KIỂM TRA NGẮT TRANG (Chỉ ngắt khi gặp Cha mới và đã đủ dòng)
+                    // last_p_Id == -1 là trường hợp record đầu tiên của toàn bộ quá trình, không ngắt.
+                    if (last_p_Id != -1 && p_id != last_p_Id && rowE > ROWS_PER_PAGINATION_SHEET) { //Giúp ngắt trang luôn có hàng cha+hàng con đầy đủ
 
-                            Log.d(TAG, "New sheet " + currentSheetIndex + " initialized with headers.");
-                        }
-                        rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
+                        Log.d(TAG, "Ghi sheet " + IdxSheet + " và chuyển sheet mới.");
 
-                        // Ghi dữ liệu của hàng hiện tại vào sheetContent
-                        writeRow(sheetContent, cursor, currentRowInSheet, DBHelperThuoc_Old.EXPORT_COLUMNS,
-                                sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor, cursorColumnIndices);
-                        currentRowInSheet++; // Tăng số dòng trong sheet
-                        totalExportedRecords++; // Tăng tổng số bản ghi đã xuất
+                        Log.d(TAG, "Max rows reached for sheet " + IdxSheet + ". Finalizing sheet.");
+                        //A. ✅ KẾT THÚC SHEET HIỆN TẠI VÀ GHI VÀO ZIP
+                        writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, IdxSheet, mergeCells);
+                        IdxSheet++; // Tăng chỉ số sheet
 
-                        // Cập nhật tiến độ
-                        int percent = (int) (totalExportedRecords * 100.0 / (totalRecordsInDb == 0 ? 1 : totalRecordsInDb));
-                        if (callbacks != null && percent > lastPercent) {
-                            callbacks.onExportProgress(percent);
-                            lastPercent = percent;
-                        }
+                        //B. Reset các biến Chuẩn bị cho sheet mới
+                        IdxSheet++; // CHỈ TĂNG 1 LẦN
+                        rowE = 6;        // <--- RESET DÒNG BẮT ĐẦU VỀ 6 cho sheet mới(sau 5 dòng tiêu đề)
 
-                    } while (cursor.moveToNext());
-                }
+                        hyperlinks.clear();
+                        hyperlinkCellRefs.clear();
+                        mergeCells.clear();
+                        sheetContent.setLength(0);
 
-                offset += BATCH_SIZE; // Tăng offset cho lô tiếp theo
+                        //C. ✅ Khởi tạo XML và header cho sheet mới : gồm 5 hàng
+                        initNewSheetXml(sheetContent, -1);  // Tạo Header cho sheet mới
+                        writeInitialSheetHeaders(sheetContent, sharedStringsMap, sharedStringList, mergeCells, minDate, maxDate);
+                    }
+
+                    // 2. LOGIC GHI DỮ LIỆU: GHI HÀNG CHA (Nếu có): (là dòng đầu tiên của một URL cha mới)
+                    if (p_id != last_p_Id) {
+                        rawColor = cursor.isNull(idx_Color) ? 0 : cursor.getInt(idx_Color); // Lấy từ table cha
+                        writeRow(sheetContent, cursor, rowE, true, colCha, DBHelperThuoc.EXPORT_COLUMNS,
+                                sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor, idx_p_url);
+
+                        rowE++; // Tăng 1 dòng
+                        last_p_Id = p_id;
+                    }
+                    // GHI HÀNG CON: luôn ghi cho mỗi record hiện hành trong cursor (con)
+                    writeRow(sheetContent, cursor, rowE, false, null, DBHelperThuoc.EXPORT_COLUMNS,
+                            sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, 0, idx_p_url);
+                    rowE++;
+                    recordCount++; // Tăng tổng số bản ghi đã xuất sang excel: Đếm để tính % tiến độ
+
+                    // Cập nhật tiến độ
+                    int percent = (int) (recordCount * 100.0 / (totalRecordsInDb == 0 ? 1 : totalRecordsInDb));
+                    if (callbacks != null && percent > lastPercent) {
+                        callbacks.onExportProgress(percent);
+                        lastPercent = percent;
+                    }
+                } while (cursor.moveToNext());
+
+                offset += BATCH_SIZE;
 
             } catch (Exception e) {
                 Log.e(TAG, "❌ Error processing batch at offset " + offset + ": " + e.getMessage(), e);
-                throw e; // Ném lại để bắt ở cấp trên
-            } finally {
-                if (cursor != null) {
-                    cursor.close(); // Đóng Cursor sau mỗi lô
-                    Log.d(TAG, "Cursor for batch at offset " + offset + " closed.");
-                }
+                throw e;
             }
         } // End while loop for batches
 
         // ✅ Ghi sheet cuối cùng (sau khi tất cả các lô đã được xử lý)
         // Chỉ ghi nếu có dữ liệu trong sheet cuối cùng hoặc nếu đây là sheet đầu tiên và không có record nào
-        if (totalExportedRecords > 0 || currentSheetIndex == 1) {
-            Log.d(TAG, "Finalizing last sheet " + currentSheetIndex + ".");
-            writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, currentSheetIndex, mergeCells);
+        if (recordCount > 0 || IdxSheet == 1) {
+            Log.d(TAG, "Finalizing last sheet " + IdxSheet + ".");
+            writeCurrentSheetToZip(zos, sheetContent, hyperlinks, hyperlinkCellRefs, IdxSheet, mergeCells);
         } else {
             Log.d(TAG, "No records exported, and no initial sheet written. Skipping final sheet write.");
         }
@@ -657,9 +509,9 @@ public class ExcelExporterOptimized {
             System.out.println("-----------------------------------------");
         }
 
-        return currentSheetIndex; // Trả về số sheet thực tế đã ghi
+        return IdxSheet; // Trả về số sheet thực tế đã ghi
     }
-    // End gốc: chạy ổn định
+
 
     /**
      * Ghi các dòng tiêu đề và header ban đầu vào sheet XML.
@@ -685,7 +537,7 @@ public class ExcelExporterOptimized {
             return sharedStringList.size() - 1;
         });
         sheetContent.append("<row r=\"").append(tempRowNum).append("\">\n");
-        sheetContent.append("<c r=\"").append(getCellRef(5, tempRowNum - 1)).append("\" t=\"s\" s=\"") // 5 = CỘT F
+        sheetContent.append("<c r=\"").append(getCellRef(5, tempRowNum)).append("\" t=\"s\" s=\"") // 5 = CỘT F
                 .append(STYLE_INDEX_TITLE).append("\"><v>").append(titleIndex).append("</v></c>\n");
         sheetContent.append("</row>\n");
         // Thêm mergeCell cho tiêu đề (giả định merge từ A đến M): KHÔNG MERGER TITILE NỮA: TITLE NÀM CỘT F
@@ -717,14 +569,14 @@ public class ExcelExporterOptimized {
         sheetContent.append("</row>\n");
 
         //4. Hàng (Row) trống, cách Header
-        tempRowNum++;   // Táng 1 hàng trống
+        tempRowNum++;   // Tăng 1 hàng trống
         //5. ✅ Header: Row thứ 5 (index 4)
         tempRowNum++;
         sheetContent.append("<row r=\"").append(tempRowNum).append("\">\n");
         int colIndexHeader = 0;
-        for (DBHelperThuoc_Old.ColumnInfo col : DBHelperThuoc_Old.EXPORT_COLUMNS) {
-            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
-            String cellRef = getCellRef(colIndexHeader, tempRowNum - 1);
+        for (DBHelperThuoc.ColumnInfo col : DBHelperThuoc.EXPORT_COLUMNS) {
+            if (DBHelperThuoc.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
+            String cellRef = getCellRef(colIndexHeader, tempRowNum);
             int strIdx = sharedStringsMap.computeIfAbsent(col.headerName, k -> {
                 sharedStringList.add(k);
                 return sharedStringList.size() - 1;
@@ -736,172 +588,77 @@ public class ExcelExporterOptimized {
         sheetContent.append("</row>\n");
     }
 
-    private static void writeRowCha(StringBuilder sheetContent,
-                                 Cursor cursor,
-                                 int rowNumInSheet,
-                                 List<DBHelperThuoc_Old.ColumnInfoUrlCha> columns,
-                                 Map<String, Integer> sharedStringsMap,
-                                 List<String> sharedStringList,
-                                 List<String> hyperlinks,
-                                 List<String> hyperlinkCellRefs,
-                                 int colorIndex) { // KHÔNG CẦN THÂM SỐ : Map<String, Integer> cursorColumnIndices
-
-
-//        tableUrlsParent + "." + DBHelperThuoc.ID + " AS url_id, " +
-//                tableUrlsParent + "." + DBHelperThuoc.PARENT_ID +", " +
-//                tableUrlsParent + "." + DBHelperThuoc.LEVEL +", " +
-//                tableUrlsParent + "." + DBHelperThuoc.URL +", " +
-//                tableUrlsParent + "." + DBHelperThuoc.GHI_CHU +", " +
-//                tableUrlsParent + "." + DBHelperThuoc.INDEX_COLOR +", " +
-//                tableUrlsParent + "." + DBHelperThuoc.LAST_UPDATED +", " +
-
-                sheetContent.append("<row r=\"").append(rowNumInSheet).append("\">\n");
-
-        int excelColIndex = 0;
-        // Chỉ tô màu hàng cha
-        int rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
-
-        for (DBHelperThuoc_Old.ColumnInfoUrlCha col : columns) {
-            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
-
-            // Nguyên mẫu của Con khi chạy chưa có quan hệ cha con
-
-//            //String kyTuSearch = "key" + url.split("key")[1];    // là UNIQUE, tránh mã thuốc bị null url Hoặc: "key" + url.split("key")[1]: Xem như duy nhất
-//            int currentColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbColumnName), -1);
-//            // Có thể bỏ cột KY_TU_SEARCH trong table Url cha, sẽ tính toán từ url
-//            if (col.dbColumnName.equals(DBHelperThuoc.KY_TU_SEARCH)) {
-//                //String url = cursorColumnIndices.get(DBHelperThuoc.URL);
-//                //columns.get(2).dbColumnName=?
-//
-//            }
-//            String value = (currentColumnIdx != -1) ? cursor.getString(currentColumnIdx) : "";
-//
-//            String link = null;
-//            if (col.dbLinkColumnName != null) {
-//                int linkColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbLinkColumnName), -1);
-//                link = (linkColumnIdx != -1 && !cursor.isNull(linkColumnIdx)) ? cursor.getString(linkColumnIdx) : null;
-//            }
-            // end nguyên mẫu
-
-            // Sửa lại theo quan hệ cha con
-            String value;
-            String link = null;
-            if (col.dbColumnName.equals(DBHelperThuoc_Old.KY_TU_SEARCH)) {
-                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
-                value = Utils.getKyTuSeach(linkKyTuSearch);   // link để lấy Ky_tu_search, lấy xong gfasn lại là null
-            } else {
-                value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
-            }
-
-            if (col.dbColumnName.equals(DBHelperThuoc_Old.MA_THUOC_P)) {
-                link = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
-                value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
-            }
-            if (col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC)) {
-                value = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.GHI_CHU));
-            }
-            //if (value == null || value.isEmpty()) continue; // VẪN PHẢI GHI MÀU SĂC
-
-
-            if (col.dbLinkColumnName != null) {
-                link = cursor.getString(cursor.getColumnIndexOrThrow(col.dbLinkColumnName));
-            }
-
-            String cellRef = getCellRef(excelColIndex, rowNumInSheet - 1);
-
-            writeCell(sheetContent, cellRef, value, link,
-                    sharedStringsMap, sharedStringList,
-                    hyperlinks, hyperlinkCellRefs,
-                    rawColor);
-
-            // Cho nhanh
-            if (rawColor == 0 && col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC) && (value == null||value.isEmpty())) {
-                // kết thúc
-                break;
-            }
-
-            excelColIndex++;
-        }
-
-        sheetContent.append("</row>\n");
-
-
-    }
-
     /**
-     * Phương thức ghi một hàng dữ liệu vào StringBuilder XML từ Cursor.
-     *
-     * @param sheetContent StringBuilder chứa XML của sheet.
-     * @param cursor Cursor hiện tại đang trỏ đến hàng cần đọc.
-     * @param rowNumInSheet Số thứ tự hàng trong Excel (1-indexed).
-     * @param columns Danh sách thông tin cột.
-     * @param sharedStringsMap Map các chuỗi dùng chung.
-     * @param sharedStringList List các chuỗi dùng chung.
-     * @param hyperlinks List các hyperlink.
-     * @param hyperlinkCellRefs List các tham chiếu ô của hyperlink.
-     * //@param colorIndex Chỉ mục cột màu trong Cursor.
-     * @param cursorColumnIndices Map tên cột -> chỉ mục cột trong Cursor.
+     * Phương thức ghi một hàng dữ liệu (Cha hoặc Con) vào StringBuilder XML từ Cursor.
      */
     private static void writeRow(StringBuilder sheetContent,
                                  Cursor cursor,
-                                 int rowNumInSheet,
-                                 List<DBHelperThuoc_Old.ColumnInfo> columns,
+                                 int rowE,
+                                 boolean isParent,
+                                 ArrayList<Integer> colCha,
+                                 List<DBHelperThuoc.ColumnInfo> columns,
                                  Map<String, Integer> sharedStringsMap,
                                  List<String> sharedStringList,
                                  List<String> hyperlinks,
                                  List<String> hyperlinkCellRefs,
-                                 int colorIndex,
-                                 Map<String, Integer> cursorColumnIndices) {
+                                 int rawColor,
+                                 int urlPIdx) {
 
-        sheetContent.append("<row r=\"").append(rowNumInSheet).append("\">\n");
-
-        int excelColIndex = 0;
-        //rawColor= 0: CÁC HÀNG CON KHÔNG TÔ MÀU
-        //int rawColor = cursor.isNull(colorIndex) ? 0 : cursor.getInt(colorIndex);
-        int rawColor = 0;
-
-        for (DBHelperThuoc_Old.ColumnInfo col : columns) {
-            if (DBHelperThuoc_Old.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
-
-            String value;
-            String link = null;
-            if (col.dbColumnName.equals(DBHelperThuoc_Old.KY_TU_SEARCH)) {
-                String linkKyTuSearch = cursor.getString(cursor.getColumnIndexOrThrow(DBHelperThuoc_Old.URL_P));
-                value = Utils.getKyTuSeach(linkKyTuSearch);   // link để lấy Ky_tu_search, lấy xong gfasn lại là null
-            } else {
-                //value = cursor.getString(cursor.getColumnIndexOrThrow(col.dbColumnName));
-                int currentColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbColumnName), -1);
-                value = (currentColumnIdx != -1 && !cursor.isNull(currentColumnIdx)) ? cursor.getString(currentColumnIdx) : "";
-                if (col.dbLinkColumnName != null) {
-                    int linkColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbLinkColumnName), -1);
-                    link = (linkColumnIdx != -1 && !cursor.isNull(linkColumnIdx)) ? cursor.getString(linkColumnIdx) : null;
-                }
-            }
-
-            // Cũ Khi cột Ky Tu Search của Cha (hoặc con) vẫn Còn
-//            int currentColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbColumnName), -1);
-//            String value = (currentColumnIdx != -1 && !cursor.isNull(currentColumnIdx)) ? cursor.getString(currentColumnIdx) : "";
-//
-//            String link = null;
-//            if (col.dbLinkColumnName != null) {
-//                int linkColumnIdx = Objects.requireNonNullElse(cursorColumnIndices.get(col.dbLinkColumnName), -1);
-//                link = (linkColumnIdx != -1 && !cursor.isNull(linkColumnIdx)) ? cursor.getString(linkColumnIdx) : null;
-//            }
-            // end cũ
-
-            String cellRef = getCellRef(excelColIndex, rowNumInSheet - 1);
-            // XEM
-            if (col.dbColumnName.equals(DBHelperThuoc_Old.TEN_THUOC)) {
-                int Stop = 0;
-            }
-            writeCell(sheetContent, cellRef, value, link,
-                    sharedStringsMap, sharedStringList,
-                    hyperlinks, hyperlinkCellRefs,
-                    rawColor);
-
-            excelColIndex++;
+        if (isParent) {
+            // Hàng cha thường có độ cao lớn hơn để phân biệt
+            sheetContent.append("<row r=\"").append(rowE).append("\" customHeight=\"1\" ht=\"20\">\n"); // Không cần cao hơn, có thể màu sắc khác
+        } else {
+            sheetContent.append("<row r=\"").append(rowE).append("\">\n");
         }
 
+        int excelColIndex = 0;
+
+        if (isParent && colCha != null) {
+            // Logic ghi hàng CHA (dựa trên danh sách chỉ mục cột colCha)
+            int totalTargetCols = (columns != null) ? columns.size() : 0;
+            for (Integer dbIdx : colCha) {
+                String value = "";
+                String link = null;
+                if (dbIdx != -1 && !cursor.isNull(dbIdx)) {
+                    value = cursor.getString(dbIdx);
+                    // Tạo link nếu giá trị là URL
+                    if (value != null && value.startsWith("http")) {
+                        link = value;
+                    }
+                }
+                String cellRef = getCellRef(excelColIndex++, rowE);
+                writeCell(sheetContent, cellRef, value, link, sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor);
+            }
+            // Điền các cell trống còn lại để hàng Cha dài bằng hàng Con
+            while (excelColIndex < totalTargetCols) {
+                writeCell(sheetContent, getCellRef(excelColIndex++, rowE), "", null, sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor);
+            }
+        } else if (columns != null) {
+            // Logic ghi hàng CON hoặc hàng THƯỜNG (dựa trên ColumnInfo)
+            for (DBHelperThuoc.ColumnInfo col : columns) {
+                if (DBHelperThuoc.INDEX_COLOR.equalsIgnoreCase(col.dbColumnName)) continue;
+
+                String value = "";
+                String link = null;
+
+                if (col.dbColumnName != null && col.dbColumnName.equals(DBHelperThuoc.KY_TU_SEARCH)) {
+                    // Xử lý đặc biệt cho KÝ TỰ SEARCH (lấy từ URL_P)
+                    String urlP = (urlPIdx != -1 && !cursor.isNull(urlPIdx)) ? cursor.getString(urlPIdx) : "";
+                    value = Utils.getKyTuSeach(urlP);
+                } else {
+                    if (col.idxCol != -1 && !cursor.isNull(col.idxCol)) {
+                        value = cursor.getString(col.idxCol);
+                    }
+
+                    if (col.idxCol_Link != -1 && !cursor.isNull(col.idxCol_Link)) {
+                        link = cursor.getString(col.idxCol_Link);
+                    }
+                }
+
+                String cellRef = getCellRef(excelColIndex++, rowE);
+                writeCell(sheetContent, cellRef, value, link, sharedStringsMap, sharedStringList, hyperlinks, hyperlinkCellRefs, rawColor);
+            }
+        }
         sheetContent.append("</row>\n");
     }
 
@@ -978,7 +735,7 @@ public class ExcelExporterOptimized {
         String result = null;
         long seconds = 0;   // Xem lại , vì time java bắt đầu 1/1/1970?
         //String sql = "SELECT " + type + "(created_at) AS result FROM " + tableName; //LAST_UPDATED
-        String sql = "SELECT " + type + "("+ DBHelperThuoc_Old.LAST_UPDATED+") AS result FROM " + tableUrlCha; //LAST_UPDATED
+        String sql = "SELECT " + type + "("+ DBHelperThuoc.LAST_UPDATED+") AS result FROM " + tableUrlCha; //LAST_UPDATED
         try {
             //result = DatabaseUtils.stringForQuery(db, sql, null);       // Trả về số Time giây INTEGER
             seconds = Long.parseLong(DatabaseUtils.stringForQuery(db, sql, null));       // Trả về số Time giây INTEGER
@@ -1359,15 +1116,30 @@ public class ExcelExporterOptimized {
         }
     }
 
+
     private static String getCellRef(int colIndex, int rowIndex) {
+        //Hàm này thường dùng cho hệ thống 0-based index (cột bắt đầu từ 0) (0 -> 'A', 1 -> B)
         StringBuilder sb = new StringBuilder();
-        int current = colIndex;
-        while (current >= 0) {
-            sb.insert(0, (char) ('A' + (current % 26)));
-            current = (current / 26) - 1;
+        int tempCol = colIndex; //Dùng tempCol để giữ giá trị gốc colIndex khi cần dùng (đúng sách vở)
+        while (tempCol >= 0) {
+            sb.insert(0, (char) ('A' + (tempCol % 26)));
+            tempCol = (tempCol / 26) - 1;
         }
-        sb.append(rowIndex + 1);
+        sb.append(rowIndex);
         return sb.toString();
+    }
+
+    // Chuyển số cột sang chữ cái (1 -> A, 2 -> B, 27 -> AA)
+    private static String getCellReference(int col, int row) {
+        //Hàm này được thiết kế cho hệ thống 1-based index (cột bắt đầu từ 1).
+        StringBuilder cellRef = new StringBuilder();
+        while (col > 0) {
+            int rem = (col - 1) % 26;
+            cellRef.insert(0, (char) (rem + 'A'));
+            col = (col - 1) / 26;
+        }
+        cellRef.append(row);
+        return cellRef.toString();
     }
 
     private static String escapeXml(String text) {

@@ -1,5 +1,4 @@
 package com.example.crawlertbdgemini2modibasicview;
-
 import static android.content.Context.NOTIFICATION_SERVICE;
 
 import android.app.Notification;
@@ -80,14 +79,15 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-public class MyWorkerCrawler extends Worker {
+public class MyWorkerCrawler_WebNew extends Worker {
     private static final String TAG = "MyWorkerCrawler";
     // XEM
     AtomicInteger numPacket = new AtomicInteger(0);
     //END XEM
     private static final Logger log = LogManager.getLogger(MyWorkerCrawler.class);
     private final DBHelperThuoc dbHelperThuoc; // Giữ tham chiếu đến Singleton DBHelperThuoc
-    
+    private SQLiteDatabase db;
+
     private static final int NOTIFICATION_ID = 1001;
     private final ConcurrentSkipListSet<String> visitedUrls; // Sử dụng ConcurrentSkipListSet:  URLs đã ghé thăm (bao gồm cả đang xử lý và đã hoàn thành)
     private final ConcurrentSkipListSet<String> completedUrlsChild; // URLs con đã hoàn thành
@@ -123,7 +123,7 @@ public class MyWorkerCrawler extends Worker {
     private long lastSavedCumulativeElapsedTime;
     private final AtomicBoolean isCancelled = new AtomicBoolean(false);
     //
-    public MyWorkerCrawler(@NonNull Context context, @NonNull WorkerParameters workerParams) {
+    public MyWorkerCrawler_WebNew(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
 
         this.context = context.getApplicationContext();
@@ -132,7 +132,8 @@ public class MyWorkerCrawler extends Worker {
         // Mới
         // Lấy thể hiện Singleton của DBHelperThuoc
         this.dbHelperThuoc = DBHelperThuoc.getInstance(context);
-        
+        this.db = dbHelperThuoc.getDb();
+
         // XÓA DÒNG NÀY: Không cần lấy dbThuoc ở đây và giữ tham chiếu lâu dài
         // this.dbThuoc = dbHelperThuoc.getWritableDatabase();  // LOẠI BỎ DÒNG NÀY!
 
@@ -241,53 +242,41 @@ public class MyWorkerCrawler extends Worker {
 
 
         //try {   // Có thể không cần
-            Log.d(TAG, "doWork: started.");
-            // Gọi mạng....
+        Log.d(TAG, "doWork: started.");
+        // Gọi mạng....
 
-            // 1. Kiểm tra trạng thái cờ HAS_CRAWL_STARTED
-            boolean hasCrawlStartedBefore = SharedPreferencesUtils.getHasCrawlStarted(context);
-            Log.d(TAG, "HAS_CRAWL_STARTED flag: " + hasCrawlStartedBefore);
+        // 1. Kiểm tra trạng thái cờ HAS_CRAWL_STARTED
+        boolean hasCrawlStartedBefore = SharedPreferencesUtils.getHasCrawlStarted(context);
+        Log.d(TAG, "HAS_CRAWL_STARTED flag: " + hasCrawlStartedBefore);
 
-            // ... (Logic khởi tạo và kiểm tra ban đầu)
-            // Khởi tạo loại crawl từ SettingsRepository
-            currentTableThuocName = selectedCrawlType.getTableThuocName();
+        // ... (Logic khởi tạo và kiểm tra ban đầu)
+        // Khởi tạo loại crawl từ SettingsRepository
+        currentTableThuocName = selectedCrawlType.getTableThuocName();
         //getUrlQueueTableName. THAY THẾ CHO TÊN: initUrlsTable
         //String urlQueueTableName = selectedCrawlType.getUrlQueueTableName();
 
-            // 2. Lấy danh sách các URL đang chờ xử lý từ DB (STATUS = 0) và biến urlInfoQueueList
-            List<UrlInfo> urlInfoQueueList;
-            boolean tiepTuc = getInputData().getBoolean("TIEP_TUC", false);
+        // 2. Lấy danh sách các URL đang chờ xử lý từ DB (STATUS = 0) và biến urlInfoQueueList
+        List<UrlInfo> urlInfoQueueList;
+        boolean tiepTuc = getInputData().getBoolean("TIEP_TUC", false);
 
-            if (!hasCrawlStartedBefore) {   // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
-                // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
-                Log.d(TAG, "Initial crawl: Database is empty. Seeding initial URLs.");
-                // Cần lấy danh sách URL ban đầu (allInitialUrls) từ đâu đó (ví dụ: MainActivity)
-                // Hoặc nó được lưu trong một Preference khác hoặc một file assets
-                // 1. Khôi phục visitedUrls (tất cả các URL đã hoàn thành từ các phiên trước)
-                // Đây là cách bạn tránh cào lại các URL đã hoàn thành, ngay cả sau khi app bị tắt.
-                if (!tiepTuc) { // KHÔNG TIẾP TUC, CHẠY PHIÊN MỚI HOÀN TOÀN
-                    // Lấy lại từ đầu theo k0,k1 (Phải delete All records bảng Queue)
-                    urlInfoQueueList = dbHelperThuoc.getListQueueUrls(settingsRepository);    //getListQueueUrlFromCrawlType
-                    // Cập nhật tổng số URL ban đầu: KHI LẤY MỚI DỰA THEO k0, k1. CẦN KHÔNG: VÌ totalURL = k1 - k0
-                    settingsRepository.saveTotalUrls(selectedCrawlType.getTotalUrlsPrefKey(), urlInfoQueueList.size());
-                    // Các thông số khác xem như =0, hoặc null
+        if (!hasCrawlStartedBefore) {   // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
+            // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
+            Log.d(TAG, "Initial crawl: Database is empty. Seeding initial URLs.");
+            // Cần lấy danh sách URL ban đầu (allInitialUrls) từ đâu đó (ví dụ: MainActivity)
+            // Hoặc nó được lưu trong một Preference khác hoặc một file assets
+            // 1. Khôi phục visitedUrls (tất cả các URL đã hoàn thành từ các phiên trước)
+            // Đây là cách bạn tránh cào lại các URL đã hoàn thành, ngay cả sau khi app bị tắt.
+            if (!tiepTuc) { // KHÔNG TIẾP TUC, CHẠY PHIÊN MỚI HOÀN TOÀN
+                // Lấy lại từ đầu theo k0,k1 (Phải delete All records bảng Queue)
+                urlInfoQueueList = dbHelperThuoc.getListQueueUrls(settingsRepository);    //getListQueueUrlFromCrawlType
+                // Cập nhật tổng số URL ban đầu: KHI LẤY MỚI DỰA THEO k0, k1. CẦN KHÔNG: VÌ totalURL = k1 - k0
+                settingsRepository.saveTotalUrls(selectedCrawlType.getTotalUrlsPrefKey(), urlInfoQueueList.size());
+                // Các thông số khác xem như =0, hoặc null
 
-                    // Đặt cờ là đã bắt đầu crawl
-                    SharedPreferencesUtils.setHasCrawlStarted(context, true);
-                } else {    //true
-                    //Lấy lại thông số cũ
-                    List<UrlInfo> completedUrlInfos = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 1);
-                    for (UrlInfo urlInfo : completedUrlInfos) {
-                        visitedUrls.add(urlInfo.getUrl());
-                    }
-                    Log.d(TAG, "Restored " + completedUrlInfos.size() + " completed URLs to visited set.");
-
-                    urlInfoQueueList = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 0);
-
-                }
-
-            } else { // Worker tự động chạy khi app khởi động lại (app bị thoát đột ngột, bị hệ thống kill
-                // Lấy lại các thông số cũ
+                // Đặt cờ là đã bắt đầu crawl
+                SharedPreferencesUtils.setHasCrawlStarted(context, true);
+            } else {    //true
+                //Lấy lại thông số cũ
                 List<UrlInfo> completedUrlInfos = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 1);
                 for (UrlInfo urlInfo : completedUrlInfos) {
                     visitedUrls.add(urlInfo.getUrl());
@@ -295,42 +284,54 @@ public class MyWorkerCrawler extends Worker {
                 Log.d(TAG, "Restored " + completedUrlInfos.size() + " completed URLs to visited set.");
 
                 urlInfoQueueList = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 0);
-                Log.d(TAG, "Found " + urlInfoQueueList.size() + " pending URLs from DB.");
-                if (urlInfoQueueList.isEmpty()) {
-                    Log.d(TAG, "No pending URLs in DB. Crawl might be complete or needs initial seeding.");
-                    // Logic cho lần chạy đầu tiên hoặc khi hoàn thành (SUCCEED):
-                    // Bạn cần kiểm tra một cờ trong SharedPreferences (ví dụ: HAS_CRAWL_STARTED)
-                    // Nếu chưa từng start, thì đây là lúc nạp các URL ban đầu vào DB và khởi tạo pendingUrlInfos
-                    // (Như đã thảo luận ở phần "StartCrawl" của người dùng)
-                    // ... (Logic kiểm tra và chèn URL ban đầu nếu cần) ...
-//                if (urlInfoQueueList.isEmpty()) { // Nếu vẫn rỗng sau khi thử seed
-//                    Log.d(TAG, "Crawl finished successfully or no initial URLs to process.");
-                    return Result.success();
-//                }
-
-                }
 
             }
 
+        } else { // Worker tự động chạy khi app khởi động lại (app bị thoát đột ngột, bị hệ thống kill
+            // Lấy lại các thông số cũ
+            List<UrlInfo> completedUrlInfos = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 1);
+            for (UrlInfo urlInfo : completedUrlInfos) {
+                visitedUrls.add(urlInfo.getUrl());
+            }
+            Log.d(TAG, "Restored " + completedUrlInfos.size() + " completed URLs to visited set.");
+
+            urlInfoQueueList = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 0);
+            Log.d(TAG, "Found " + urlInfoQueueList.size() + " pending URLs from DB.");
+            if (urlInfoQueueList.isEmpty()) {
+                Log.d(TAG, "No pending URLs in DB. Crawl might be complete or needs initial seeding.");
+                // Logic cho lần chạy đầu tiên hoặc khi hoàn thành (SUCCEED):
+                // Bạn cần kiểm tra một cờ trong SharedPreferences (ví dụ: HAS_CRAWL_STARTED)
+                // Nếu chưa từng start, thì đây là lúc nạp các URL ban đầu vào DB và khởi tạo pendingUrlInfos
+                // (Như đã thảo luận ở phần "StartCrawl" của người dùng)
+                // ... (Logic kiểm tra và chèn URL ban đầu nếu cần) ...
+//                if (urlInfoQueueList.isEmpty()) { // Nếu vẫn rỗng sau khi thử seed
+//                    Log.d(TAG, "Crawl finished successfully or no initial URLs to process.");
+                return Result.success();
+//                }
+
+            }
+
+        }
+
 //            startTime = System.currentTimeMillis(); // đẠT CHỖ NÀY?
 //            Log.d(TAG, "doWork started for " + selectedCrawlType.name());
-            // Mới
-            // Khởi tạo số lượng lấy từ prefs đã lưu
-                    // a/ URL (start=1) đã cào thành công từ SharedPreferences của phiên trước
-            crawledUrlStar1Count = new AtomicLong(settingsRepository.getCrawledUrlsStart1Count(
-                    selectedCrawlType.getCrawledUrlStart1sCountPrefKey()));
-            // XEM: KIỂM TRA SỐ crawledUrlStar1Count CCOS ĐÚNG KHÔNG? TAI SAO TỔNG crawledUrlStar1Count <> tOtAL
-                    // b/ Tổng số url chung đã xử lý (cào) được
-            crawledUrlCount = new AtomicLong(settingsRepository.getSumCrawledUrlsCount(
-                    selectedCrawlType.getCrawledUrlsCountPrefKey()
-            ));
-            // Tính lại từ đầu percent
-            percent = (int) (crawledUrlStar1Count.get() * 100.0 / (totalUrlsToCrawl==0?1:totalUrlsToCrawl));
-            long finalCumulativeElapsedTime = 0; // Thay thế finalElapsedTime bằng finalCumulativeElapsedTime
+        // Mới
+        // Khởi tạo số lượng lấy từ prefs đã lưu
+        // a/ URL (start=1) đã cào thành công từ SharedPreferences của phiên trước
+        crawledUrlStar1Count = new AtomicLong(settingsRepository.getCrawledUrlsStart1Count(
+                selectedCrawlType.getCrawledUrlStart1sCountPrefKey()));
+        // XEM: KIỂM TRA SỐ crawledUrlStar1Count CCOS ĐÚNG KHÔNG? TAI SAO TỔNG crawledUrlStar1Count <> tOtAL
+        // b/ Tổng số url chung đã xử lý (cào) được
+        crawledUrlCount = new AtomicLong(settingsRepository.getSumCrawledUrlsCount(
+                selectedCrawlType.getCrawledUrlsCountPrefKey()
+        ));
+        // Tính lại từ đầu percent
+        percent = (int) (crawledUrlStar1Count.get() * 100.0 / (totalUrlsToCrawl==0?1:totalUrlsToCrawl));
+        long finalCumulativeElapsedTime = 0; // Thay thế finalElapsedTime bằng finalCumulativeElapsedTime
 
         try {
             // Chạy trước để ghi data vào sqlite: THẤT BẠI DO 2 LỆNH NÀY
-            CrawlRuntime runtime = new CrawlRuntime(getApplicationContext());
+            CrawlRuntime runtime = new CrawlRuntime(db, getApplicationContext() );
             runtime.start();
 
             // 3. Khởi tạo ForkJoinPool
@@ -350,8 +351,8 @@ public class MyWorkerCrawler extends Worker {
                 // 1/ Cũ
                 //forkJoinPool.invoke(new UrlCrawlRecursiveAction(urlInfoQueueList));// cỦA GEMINI
 
-                        forkJoinPool.invoke(new CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
-                                crawledUrlStar1Count, runtime, isCancelled)); // truyền dbHelperThuoc thay vì dbThuoc
+                forkJoinPool.invoke(new MyWorkerCrawler_WebNew.CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
+                        crawledUrlStar1Count, runtime, isCancelled)); // truyền dbHelperThuoc thay vì dbThuoc
 
                 forkJoinPool.shutdown();
                 //forkJoinPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
@@ -538,11 +539,11 @@ public class MyWorkerCrawler extends Worker {
 
         // End Mới
 
-                // CŨ \\\\\\\\\\\/////////\\\\\\\\///////
-                // Cờ này LUÔN LUÔN là true nếu WorkRequest này được tạo ban đầu với cờ đó
-    //            boolean isFirstRunForThisWorkRequest = getInputData().getBoolean(AppConstants.KEY_IS_FIRST_RUN, false);
-    //            // Kiểm tra trạng thái lưu trữ bền vững để xác định đây có phải là lần tiếp tục không
-    //            boolean hasBeenStartedBefore = prefs.getBoolean(KEY_HAS_BEEN_STARTED_BEFORE, false);
+        // CŨ \\\\\\\\\\\/////////\\\\\\\\///////
+        // Cờ này LUÔN LUÔN là true nếu WorkRequest này được tạo ban đầu với cờ đó
+        //            boolean isFirstRunForThisWorkRequest = getInputData().getBoolean(AppConstants.KEY_IS_FIRST_RUN, false);
+        //            // Kiểm tra trạng thái lưu trữ bền vững để xác định đây có phải là lần tiếp tục không
+        //            boolean hasBeenStartedBefore = prefs.getBoolean(KEY_HAS_BEEN_STARTED_BEFORE, false);
 //        } catch (RuntimeException e) {
 //            if (e.getCause() instanceof IOException) {
 //                // Đứt mạng → retry
@@ -620,8 +621,8 @@ public class MyWorkerCrawler extends Worker {
         //private static Logger logger = Logger.getAnonymousLogger();
 
         //CÓ THỂ KHÔNG CHIA, MÀ CHẠY VÒNG LẶP
-         public CrawlRecursiveAction(List<UrlInfo> urlInfoQueueList, int start, int end,
-                                     AtomicLong crawledUrlStar1Count, CrawlRuntime runtime, AtomicBoolean isCancelled) {
+        public CrawlRecursiveAction(List<UrlInfo> urlInfoQueueList, int start, int end,
+                                    AtomicLong crawledUrlStar1Count, CrawlRuntime runtime, AtomicBoolean isCancelled) {
 
             // PP CŨ của tôi
             this.crawledUrlStar1Count = crawledUrlStar1Count;
@@ -633,12 +634,12 @@ public class MyWorkerCrawler extends Worker {
 //            this.parentId = parentId;
 //            this.level=level;
             // this.db = db; // LOẠI BỎ DÒNG NÀY!
-             // private SQLiteDatabase dbThuoc; // LOẠI BỎ BIẾN NÀY!
-             // Thay thế bằng DBHelperThuoc
+            // private SQLiteDatabase dbThuoc; // LOẠI BỎ BIẾN NÀY!
+            // Thay thế bằng DBHelperThuoc
 
-             //this.crawledUrlChilds = crawledUrlChilds;   //Chỉ dùng visitedUrls là đủ, không cần dùng crawledUrlChilds khi tìm các trang con
-             this.isCancelled = isCancelled;
-         }
+            //this.crawledUrlChilds = crawledUrlChilds;   //Chỉ dùng visitedUrls là đủ, không cần dùng crawledUrlChilds khi tìm các trang con
+            this.isCancelled = isCancelled;
+        }
         @Override
         public void compute() {
             Log.d(TAG, "compute: Bắt đầu chia công việc");
@@ -731,8 +732,8 @@ public class MyWorkerCrawler extends Worker {
                     int mid = start + (end - start) / 2;
                     Log.d(TAG, "compute(): split -> left=[" + start + "," + mid + "), right=[" + mid + "," + end + ")");
 
-                    CrawlRecursiveAction left = new CrawlRecursiveAction(urlInfoQueueList, start, mid, crawledUrlStar1Count, runtime, isCancelled);
-                    CrawlRecursiveAction right = new CrawlRecursiveAction(urlInfoQueueList, mid, end, crawledUrlStar1Count, runtime, isCancelled); //end exclusive: mid "KHÔNG" + 1
+                    MyWorkerCrawler_WebNew.CrawlRecursiveAction left = new MyWorkerCrawler_WebNew.CrawlRecursiveAction(urlInfoQueueList, start, mid, crawledUrlStar1Count, runtime, isCancelled);
+                    MyWorkerCrawler_WebNew.CrawlRecursiveAction right = new MyWorkerCrawler_WebNew.CrawlRecursiveAction(urlInfoQueueList, mid, end, crawledUrlStar1Count, runtime, isCancelled); //end exclusive: mid "KHÔNG" + 1
                     invokeAll(left, right);
 
                 }
@@ -743,6 +744,7 @@ public class MyWorkerCrawler extends Worker {
                     throw e;
                 }
             } finally {
+                // Bổ sung thêm
                 runtime.activeCrawlerCount.decrementAndGet();
             }
         }
@@ -751,9 +753,9 @@ public class MyWorkerCrawler extends Worker {
         public List<ThuocSQLite>  crawlUrl(String url, int id_url, int level, ConcurrentSkipListSet<String> crawledUrlChilds,
                                            AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc) throws IOException {
             /* Mục đích:
-                * 1/ Cào dữ liệu thuốc từ url
-                * 2/ Đãnh dấu url đã cào vào vào bảng URL_QUEUE với STATUS=1
-                * 3/ Lưu các Url con lấy được vào bảng URL_QUEUE với STATUS=0
+             * 1/ Cào dữ liệu thuốc từ url
+             * 2/ Đãnh dấu url đã cào vào vào bảng URL_QUEUE với STATUS=1
+             * 3/ Lưu các Url con lấy được vào bảng URL_QUEUE với STATUS=0
              */
             // Lưu trữ thông tin về URL vào bảng URL_QUEUE với Ttrang thái chưa xử lý (STATUS = 0)
             //long idUrrl = dbHelperThuoc.addUrlToQueue(selectedCrawlType.getUrlQueueTableName(), url, parentId, level, extractKyTuSearchFromUrl(url));
@@ -761,7 +763,7 @@ public class MyWorkerCrawler extends Worker {
 
             // Đặt setProgress ở đây thử: TRƯỚC KHI GET DOCUMENT
             //if (url.endsWith("start=1")) {
-                setProgressStartBang1(id_url, url);
+            setProgressStartBang1(id_url, url);
             //}
             String err_message = "";
             int indexColor = 0;
@@ -776,7 +778,7 @@ public class MyWorkerCrawler extends Worker {
             //dbHelperThuoc.markUrlAsProcessing(dbThuoc, selectedCrawlType.getUrlQueueTableName(), url, level);   // Đánh dấu url là đang xử lý
 
             //Tạo một số đối tượng Thuoc: 2 phương pháp khác nhau: chỉ chọn 1
-                // 1/ Dành cho Room: Tạo một số đối tượng Thuoc
+            // 1/ Dành cho Room: Tạo một số đối tượng Thuoc
             List<ThuocRoom> thuocToInsert = new ArrayList<>();
             // Thêm url đầu tiên vào thuoc của ROOM: 2kytu hoặc 3kyTu, trước khi lấy document
             //  Nếu kết nối đến trang web thất bại, thì vẫn có listThuoc chứa url đầu tiên sẽ thêm url vào table ThuocPrefs
@@ -795,7 +797,7 @@ public class MyWorkerCrawler extends Worker {
             // ... điền các trường khác
             thuocToInsert.add(thuocRoom);   //Phần tử đầu là Hàng đầu
 
-                // 2/ Dành cho Prefs: Tạo một số đối tượng Thuoc
+            // 2/ Dành cho Prefs: Tạo một số đối tượng Thuoc
             List <ThuocSQLite> listThuoc = new ArrayList<>();
 
             //  Nếu kết nối đến trang web thất bại, thì vẫn có listThuoc chứa url đầu tiên sẽ thêm url vào table ThuocPrefs
@@ -984,7 +986,7 @@ public class MyWorkerCrawler extends Worker {
                     try {
                         if (!maThuocDaLay.containsKey(thuocSQLite.ma_thuoc)) { //Hoặc dùng isMaThuocExists cũng nhanh do maThuoc UNIQUE INDEX
                             // Các khác
-                        //if (!dbHelperThuoc.isMaThuocExists(runtime.db, selectedCrawlType.getTableThuocName(),thuocSQLite.ma_thuoc, url)) {
+                            //if (!dbHelperThuoc.isMaThuocExists(runtime.db, selectedCrawlType.getTableThuocName(),thuocSQLite.ma_thuoc, url)) {
                             trungTatCaMaThuoc = false;  //Chỉ cần 1 lần false
 
                             //long id = dbHelperThuoc.insertThuoc(...); // insert với maThuoc, tenThuoc,...
@@ -1127,7 +1129,7 @@ public class MyWorkerCrawler extends Worker {
 
         // Theo pp: CHA-CON(Parent-child)
         public Packet crawlUrlParentChild(UrlInfo urlInfo, int id_url, int level, ConcurrentSkipListSet<String> crawledUrlChilds,
-                                                     AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc) throws UnknownHostException { //throws IOException
+                                          AtomicLong crawledUrlCount, AtomicLong crawledUrlStar1Count, DBHelperThuoc dbHelperThuoc) throws UnknownHostException { //throws IOException
             /* Mục đích:
              * 1/ Cào dữ liệu thuốc từ url
              * 2/ Đãnh dấu url đã cào vào vào bảng URL_QUEUE với STATUS=1
@@ -1249,10 +1251,10 @@ public class MyWorkerCrawler extends Worker {
                     //listThuoc.get(0).ghi_chu = "TRANG NÀY KHÔNG CÓ THUỐC";
                     urlInfo.setStatus(1);   // KHÔNG CÓ THUỐC, CŨNG ĐÁNH DẤU ĐÃ XỬ LÝ HOÀN THÀNH (STATUS = 1)/
                     urlInfo.setGhiChu("TRANG NÀY KHÔNG CÓ THUỐC");
-                    
+
                     urlInfo.setIndexColor(2);   // 2- Nền Đỏ (Red)
                     //data.put(urlInfo, thuocList);
-                    
+
                     // Thay vì:
                     //nếu thành công trả về true, ngược lại false
                     // dbHelperThuoc.insertMultipleThuoc(db, table, listThuoc); // Sai, db không nên là tham số
@@ -1416,7 +1418,7 @@ public class MyWorkerCrawler extends Worker {
 
                 // SAU KHI LẤY HẾT DỮ LIỆU THUỐC CHO 1 urlInfo: Thêm vào data
                 completedUrlsChild.add(url); // Thêm URL con vào map
-            
+
                 if (!trungTatCaMaThuoc) {   //KHÔNG trùng tất cả
                     if (soMaThuocDaLay > 0) {
                         //urlInfo.setStatus(1);   // ĐÁNH DẤU ĐÃ XỬ LÝ HOÀN THÀNH (STATUS = 1)/
@@ -1810,8 +1812,7 @@ public class MyWorkerCrawler extends Worker {
             // Batch còn lại (< THRESHOLD)
             if (!listUrlInfosChild.isEmpty()) {
                 List<UrlInfo> batch = new ArrayList<>(listUrlInfosChild);
-                listCrawlChild.add(new CrawlRecursiveAction(
-                        batch, 0, batch.size(), crawledUrlStar1Count, runtime, isCancelled));
+                listCrawlChild.add(new CrawlRecursiveAction(batch, 0, batch.size(), crawledUrlStar1Count, runtime, isCancelled));
                 Log.d(TAG, "crawlChildPages: tạo task con cuối cùng size=" + batch.size());
             }
 
@@ -1905,11 +1906,9 @@ public class MyWorkerCrawler extends Worker {
 
         private final Thread monitorThread;
         //private final Thread writerThread;
-        public CrawlRuntime(Context context) {
-
-            //DBHelperThuoc helper = DBHelperThuoc.getInstance(context.getApplicationContext());
-            db = dbHelperThuoc.getWritableDatabase();    //Gốc
-//            db = helper.getDb();  //Singleton
+        public CrawlRuntime(SQLiteDatabase db, Context context) {
+            this.db = db;  // Nên truyền db cho thống nhất chỉ từ 1 connection
+//            db = dbHelperThuoc.getDb();    //Gốc: Singleton
             // Cũ
 //            queue = new LinkedBlockingQueue<>(500);
 //            writer = new WriterEngine(db, queue, selectedCrawlType.getTableThuocName());
@@ -2135,18 +2134,18 @@ public class MyWorkerCrawler extends Worker {
                     Log.e(TAG, "CrawlRuntime: Error checking/cleaning WAL", e);
                 }
 
-                // B7. ✅ Đóng DB
-                try {
-                    // Vì dùng DBHelperThuoc là singleton: Nghĩa là trong suốt vòng đời app,
-                    // toàn bộ code dùng một DBHelper, và DBHelper thường tự quản lý DB connection.
-                    // Nếu app còn sống, không cần gọi db.close() thủ công mỗi lần xong việc.
-                    //
-                    //Thực tế Android team cũng khuyến nghị: chỉ đóng DB khi app thực sự thoát (ví dụ trong Application.onTerminate() hoặc khi chắc chắn không crawl thêm gì nữa).
-                    db.close(); // ✅ giờ mới an toàn(Có nên đóng db?)
-                    Log.d(TAG, "Database closed after optional checkpoint");
-                } catch (Exception e) {
-                    Log.e(TAG, "Error closing database", e);
-                }
+                // B7. ✅ Đóng DB: GEMINI KHUYÊN KHÔNG ĐÓNG db
+//                try {
+//                    // Vì dùng DBHelperThuoc là singleton: Nghĩa là trong suốt vòng đời app,
+//                    // toàn bộ code dùng một DBHelper, và DBHelper thường tự quản lý DB connection.
+//                    // Nếu app còn sống, không cần gọi db.close() thủ công mỗi lần xong việc.
+//                    //
+//                    //Thực tế Android team cũng khuyến nghị: chỉ đóng DB khi app thực sự thoát (ví dụ trong Application.onTerminate() hoặc khi chắc chắn không crawl thêm gì nữa).
+//                    db.close(); // ✅ giờ mới an toàn(Có nên đóng db?)
+//                    Log.d(TAG, "Database closed after optional checkpoint");
+//                } catch (Exception e) {
+//                    Log.e(TAG, "Error closing database", e);
+//                }
             }
 
             Log.i(TAG, "Stopped OK");
@@ -2314,4 +2313,4 @@ public class MyWorkerCrawler extends Worker {
 
 
     ////////////////////////////////////////
-} // End class MyWorkerCrawler
+} // End class MyWorkerCrawler_

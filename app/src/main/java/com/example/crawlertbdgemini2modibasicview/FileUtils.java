@@ -13,7 +13,7 @@ import android.util.Log;
 
 import androidx.core.content.FileProvider;
 
-import org.apache.poi.ss.usermodel.Workbook;
+//import org.apache.poi.ss.usermodel.Workbook;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -494,9 +494,9 @@ public class FileUtils {
      * @param fileName Tên file (ví dụ: "my_excel_report.xlsx").
      * @return true nếu lưu thành công, false nếu lỗi.
      */
-    public static boolean saveExcelToDownloads(Context context, Workbook wB, String fileName) {
-        return saveExcelToPublicDirectory(context, wB, fileName, Environment.DIRECTORY_DOWNLOADS);
-    }
+//    public static boolean saveExcelToDownloads(Context context, Workbook wB, String fileName) {
+//        return saveExcelToPublicDirectory(context, wB, fileName, Environment.DIRECTORY_DOWNLOADS);
+//    }
 
     /**
      * Lưu Workbook Excel vào thư mục Documents công cộng.
@@ -507,9 +507,9 @@ public class FileUtils {
      * @param fileName Tên file (ví dụ: "my_document.xlsx").
      * @return true nếu lưu thành công, false nếu lỗi.
      */
-    public static boolean saveExcelToDocuments(Context context, Workbook wB, String fileName) {
-        return saveExcelToPublicDirectory(context, wB, fileName, Environment.DIRECTORY_DOCUMENTS);
-    }
+//    public static boolean saveExcelToDocuments(Context context, Workbook wB, String fileName) {
+//        return saveExcelToPublicDirectory(context, wB, fileName, Environment.DIRECTORY_DOCUMENTS);
+//    }
 
     /**
      * Phương thức chung để lưu Workbook Excel vào thư mục công cộng được chỉ định.
@@ -521,59 +521,59 @@ public class FileUtils {
      * @param publicDirectory Hằng số thư mục công cộng (e.g., Environment.DIRECTORY_DOWNLOADS).
      * @return true nếu lưu thành công, false nếu lỗi.
      */
-    private static boolean saveExcelToPublicDirectory(Context context, Workbook wB, String fileName, String publicDirectory) {
-        ContentResolver resolver = context.getContentResolver();
-        Uri uri = null;
-        OutputStream fos = null;
-
-        try {
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.ms-excel"); // Hoặc "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" cho .xlsx
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, publicDirectory);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Với Android 10 (Q) trở lên, sử dụng MediaStore để ghi trực tiếp
-                uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                if (uri == null) {
-                    Log.e(TAG, "Failed to create new MediaStore entry for " + fileName + " in " + publicDirectory);
-                    return false;
-                }
-                fos = resolver.openOutputStream(uri);
-            } else {
-                // Với Android dưới 10, sử dụng FileOutputStream truyền thống
-                File downloadsDir = Environment.getExternalStoragePublicDirectory(publicDirectory);
-                if (!createDirectory(downloadsDir.getAbsolutePath())) { // Đảm bảo thư mục tồn tại
-                    return false;
-                }
-                File file = new File(downloadsDir, fileName);
-                fos = new FileOutputStream(file);
-                // Sau khi ghi xong, cần quét media để file xuất hiện (không bắt buộc với MediaStore API trên Q+)
-                // MediaScannerConnection.scanFile(context, new String[]{file.getAbsolutePath()}, null, null);
-            }
-
-            if (fos != null) {
-                wB.write(fos);
-                Log.d(TAG, "Excel file saved to " + publicDirectory + ": " + fileName);
-                return true;
-            } else {
-                Log.e(TAG, "OutputStream was null, cannot save file.");
-                return false;
-            }
-
-        } catch (IOException e) {
-            Log.e(TAG, "Error saving Excel file to " + publicDirectory + ": " + e.getMessage(), e);
-            return false;
-        } finally {
-            if (fos != null) {
-                try {
-                    fos.close();
-                } catch (IOException e) {
-                    Log.e(TAG, "Error closing OutputStream: " + e.getMessage());
-                }
-            }
-        }
-    }
+//    private static boolean saveExcelToPublicDirectory(Context context, Workbook wB, String fileName, String publicDirectory) {
+//        ContentResolver resolver = context.getContentResolver();
+//        Uri uri = null;
+//        OutputStream fos = null;
+//
+//        try {
+//            ContentValues values = new ContentValues();
+//            values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+//            values.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.ms-excel"); // Hoặc "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" cho .xlsx
+//            values.put(MediaStore.MediaColumns.RELATIVE_PATH, publicDirectory);
+//
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+//                // Với Android 10 (Q) trở lên, sử dụng MediaStore để ghi trực tiếp
+//                uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+//                if (uri == null) {
+//                    Log.e(TAG, "Failed to create new MediaStore entry for " + fileName + " in " + publicDirectory);
+//                    return false;
+//                }
+//                fos = resolver.openOutputStream(uri);
+//            } else {
+//                // Với Android dưới 10, sử dụng FileOutputStream truyền thống
+//                File downloadsDir = Environment.getExternalStoragePublicDirectory(publicDirectory);
+//                if (!createDirectory(downloadsDir.getAbsolutePath())) { // Đảm bảo thư mục tồn tại
+//                    return false;
+//                }
+//                File file = new File(downloadsDir, fileName);
+//                fos = new FileOutputStream(file);
+//                // Sau khi ghi xong, cần quét media để file xuất hiện (không bắt buộc với MediaStore API trên Q+)
+//                // MediaScannerConnection.scanFile(context, new String[]{file.getAbsolutePath()}, null, null);
+//            }
+//
+//            if (fos != null) {
+//                wB.write(fos);
+//                Log.d(TAG, "Excel file saved to " + publicDirectory + ": " + fileName);
+//                return true;
+//            } else {
+//                Log.e(TAG, "OutputStream was null, cannot save file.");
+//                return false;
+//            }
+//
+//        } catch (IOException e) {
+//            Log.e(TAG, "Error saving Excel file to " + publicDirectory + ": " + e.getMessage(), e);
+//            return false;
+//        } finally {
+//            if (fos != null) {
+//                try {
+//                    fos.close();
+//                } catch (IOException e) {
+//                    Log.e(TAG, "Error closing OutputStream: " + e.getMessage());
+//                }
+//            }
+//        }
+//    }
 
     /**
      * Lấy mảng các file Excel (.xls hoặc .xlsx) trong một thư mục công cộng, sắp xếp giảm dần theo thời gian sửa đổi.

@@ -1,0 +1,284 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "48b5f150532608fdab04c4dc06858306",
+    "entities": [
+      {
+        "tableName": "work_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`workIdPrefKey` TEXT NOT NULL, `workId` BLOB, `state` TEXT, `progress` INTEGER NOT NULL, `message` TEXT, `startTime` INTEGER NOT NULL, PRIMARY KEY(`workIdPrefKey`))",
+        "fields": [
+          {
+            "fieldPath": "workIdPrefKey",
+            "columnName": "workIdPrefKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workId",
+            "columnName": "workId",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "progress",
+            "columnName": "progress",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startTime",
+            "columnName": "startTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "workIdPrefKey"
+          ]
+        }
+      },
+      {
+        "tableName": "thuoc_info_room",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `loai_thuoc` TEXT NOT NULL, `crawled_from_url` TEXT NOT NULL, `parent_id_of_crawled_url` INTEGER NOT NULL, `level_of_crawled_url` INTEGER NOT NULL, `ky_tu_search` TEXT NOT NULL, `ma_thuoc` TEXT NOT NULL, `ten_thuoc` TEXT NOT NULL, `thanh_phan` TEXT NOT NULL, `nhom_thuoc` TEXT NOT NULL, `dang_thuoc` TEXT NOT NULL, `san_xuat` TEXT NOT NULL, `dang_ky` TEXT NOT NULL, `phan_phoi` TEXT NOT NULL, `sdk` TEXT NOT NULL, `cac_thuoc` TEXT NOT NULL, `ghi_chu` TEXT NOT NULL, `index_color` INTEGER NOT NULL, `link_ky_tu_search` TEXT NOT NULL, `link_ma_thuoc` TEXT NOT NULL, `thanh_phan_link` TEXT NOT NULL, `NHOM_THUOC_LINK` TEXT NOT NULL, `DANG_THUOC_LINK` TEXT NOT NULL, `SAN_XUAT_LINK` TEXT NOT NULL, `DANG_KY_LINK` TEXT NOT NULL, `PHAN_PHOI_LINK` TEXT NOT NULL, `SDK_LINK` TEXT NOT NULL, `CAC_THUOC_LINK` TEXT NOT NULL, `link_ghi_chu` TEXT NOT NULL, `is_crawled` INTEGER NOT NULL DEFAULT 0, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "loai_thuoc",
+            "columnName": "loai_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "crawled_from_url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parent_id_of_crawled_url",
+            "columnName": "parent_id_of_crawled_url",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level_of_crawled_url",
+            "columnName": "level_of_crawled_url",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ky_tu_search",
+            "columnName": "ky_tu_search",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ma_thuoc",
+            "columnName": "ma_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ten_thuoc",
+            "columnName": "ten_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thanh_phan",
+            "columnName": "thanh_phan",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nhom_thuoc",
+            "columnName": "nhom_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dang_thuoc",
+            "columnName": "dang_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "san_xuat",
+            "columnName": "san_xuat",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dang_ky",
+            "columnName": "dang_ky",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phan_phoi",
+            "columnName": "phan_phoi",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sdk",
+            "columnName": "sdk",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cac_thuoc",
+            "columnName": "cac_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ghi_chu",
+            "columnName": "ghi_chu",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "index_color",
+            "columnName": "index_color",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "link_ky_tu_search",
+            "columnName": "link_ky_tu_search",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "link_ma_thuoc",
+            "columnName": "link_ma_thuoc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thanh_phan_link",
+            "columnName": "thanh_phan_link",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "NHOM_THUOC_LINK",
+            "columnName": "NHOM_THUOC_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "DANG_THUOC_LINK",
+            "columnName": "DANG_THUOC_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "SAN_XUAT_LINK",
+            "columnName": "SAN_XUAT_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "DANG_KY_LINK",
+            "columnName": "DANG_KY_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "PHAN_PHOI_LINK",
+            "columnName": "PHAN_PHOI_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "SDK_LINK",
+            "columnName": "SDK_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "CAC_THUOC_LINK",
+            "columnName": "CAC_THUOC_LINK",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "link_ghi_chu",
+            "columnName": "link_ghi_chu",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "is_crawled",
+            "columnName": "is_crawled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updated_at",
+            "columnName": "updated_at",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_thuoc_info_room_ma_thuoc",
+            "unique": true,
+            "columnNames": [
+              "ma_thuoc"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_thuoc_info_room_ma_thuoc` ON `${TABLE_NAME}` (`ma_thuoc`)"
+          },
+          {
+            "name": "index_thuoc_info_room_loai_thuoc_ma_thuoc",
+            "unique": false,
+            "columnNames": [
+              "loai_thuoc",
+              "ma_thuoc"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thuoc_info_room_loai_thuoc_ma_thuoc` ON `${TABLE_NAME}` (`loai_thuoc`, `ma_thuoc`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48b5f150532608fdab04c4dc06858306')"
+    ]
+  }
+}

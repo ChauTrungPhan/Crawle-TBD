@@ -26,7 +26,7 @@ public class MyViewModelCreateExcel_Gemini extends AndroidViewModel {
     private final WorkManager workManager;
     private final LiveData<List<WorkInfo>> workInfoLiveData;
     private final ExecutorService excelExportExecutor; // CHỈNH SỬA: ExecutorService cho tác vụ xuất Excel
-    private final ExcelExporterOptimized_goc excelExporterOptimized;
+    private final ExcelExporterOptimized excelExporterOptimized;
 
     public MyViewModelCreateExcel_Gemini(@NonNull Application application, ExcelExporterOptimized excelExporterOptimized) {
         super(application);
@@ -63,7 +63,7 @@ public class MyViewModelCreateExcel_Gemini extends AndroidViewModel {
     }
 
     // CHỈNH SỬA: Thêm phương thức exportToExcel
-    public void exportToExcel(SQLiteDatabase db, String tableName, String filePath, ExcelExporterOptimized_goc.ExportCallbacks callbacks) {
+    public void exportToExcel(SQLiteDatabase db, String tableName, String filePath, ExcelExporterOptimized.ExportCallbacks callbacks) {
         // Chạy tác vụ xuất Excel trên luồng nền
         excelExportExecutor.execute(() -> {
             try {

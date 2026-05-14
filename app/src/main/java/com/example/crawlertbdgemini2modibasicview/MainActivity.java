@@ -33,6 +33,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -72,7 +73,6 @@ public class MainActivity extends AppCompatActivity {   // Mới
      *Cho phép bật/tắt disable nút khi ENQUEUED
      **/
     // Của Crawl
-    private WriterEngine writerEngine;  // ✅ khai báo ở đây
     private boolean cancelledWorker;
 
     private static final boolean DISABLE_BUTTONS_WHEN_ENQUEUED = true;
@@ -168,7 +168,7 @@ public class MainActivity extends AppCompatActivity {   // Mới
     private AppDatabase appDatabase;
     private WorkStateDao workStateDao;
 
-    private DBHelperThuoc_Old dbHelperThuoc;
+    private DBHelperThuoc dbHelperThuoc;
     //private SQLiteDatabase dbThuoc;
     private ExportViewModel exportViewModel; // Khai báo ExportViewModel
     ///
@@ -183,13 +183,14 @@ public class MainActivity extends AppCompatActivity {   // Mới
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        EdgeToEdge.enable(this);
         super.onCreate(savedInstanceState);
         binding = ActivityMainBinding.inflate(getLayoutInflater()); // Initialize View Binding
         setContentView(binding.getRoot());  // Set the root view
         ///
-        Window window = getWindow();
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false); // Cho phép nội dung kéo dài
-        window.setStatusBarColor(ContextCompat.getColor(this.getApplicationContext(), android.R.color.transparent)); // Thanh trạng thái trong suốt
+        //Window window = getWindow();
+        // WindowCompat.setDecorFitsSystemWindows(getWindow(), false); // Đã được xử lý bởi EdgeToEdge.enable(this)
+        // window.setStatusBarColor(ContextCompat.getColor(this.getApplicationContext(), android.R.color.transparent)); // Đã được xử lý bởi EdgeToEdge.enable(this)
         // Xóa giá trị cũ để đảm bảo nó được lưu lại dưới dạng long: RẤT VÔ LÝ! KHÔNG BIẾT TẠI SAO
         //SharedPreferencesUtils.remove(this, PrefKey.CRAWLED_URLSTART1_2KT_COUNT);   // Tại sao có lệnh này?
         //
@@ -213,7 +214,7 @@ public class MainActivity extends AppCompatActivity {   // Mới
         appDatabase = AppDatabase.getInstance(this.getApplicationContext()); // Lấy thể hiện của Room Database
         workStateDao = appDatabase.workStateDao(); // Lấy DAO
 
-        dbHelperThuoc = DBHelperThuoc_Old.getInstance(this.getApplicationContext());
+        dbHelperThuoc = DBHelperThuoc.getInstance(this.getApplicationContext());
         //if (dbHelperThuoc.getCountErrorUrls(selectedCrawlType.getUrlQueueTableName()) > 0) {
         if (dbHelperThuoc.hasErrorUrls(selectedCrawlType)) {
             binding.tvSoUrlErrors.setVisibility(View.VISIBLE);
@@ -1134,8 +1135,6 @@ private void confirmDeleteFile(File file) {
     }
 
     private void startCrawl() {
-        //writerEngine = new WriterEngine();
-        writerEngine = new WriterEngineChunked(selectedCrawlType, db, queue, 100); // chunk = 100
         startTime = System.currentTimeMillis();
 //        if (!viewModelCrawlerGemini.isWorkRunning()) {  // NẾU KHÔNG ĐANG CHẠY: CHỈ XAY RA KHI NHẤN LẦN 2,3N=.. LIÊN TIẾP
 
@@ -1300,7 +1299,8 @@ private void confirmDeleteFile(File file) {
                                         } else {    //Chưa viết
                                             customCrawlString = "";
                                         }
-                                        startCrawlTuDau();
+                                        // HỌC HỎI: Truyền customCrawlString đã lấy được vào hàm khởi tạo
+                                        startCrawlTuDau(customCrawlString);
                                         // Đổi tên nút: 1 nút 2 chức năng
                                         isCrawling = true;
                                         //binding.btnCrawlData.setText("Dừng Crawl");
@@ -1331,31 +1331,18 @@ private void confirmDeleteFile(File file) {
                 }
 
             } else {    // CHẠY MỚI HOÀN TOÀN
-                isCrawling = true;
-//                binding.btnCrawlData.setText("Dừng Crawl");
-                binding.btnCrawlData.setText("Đang Crawl");
-                startCrawlTuDau();
-                // Code sau chính là startCrawlTuDau()
-//                // Đặt lại cờ HAS_CRAWL_STARTED về false khi bắt đầu một phiên mới hoàn toàn
-//                SharedPreferencesUtils.setHasCrawlStarted(getApplicationContext(), false);  // set false
-//                // reset Thanh diễn tiến = 0
-//                binding.progressPercentText.setText(0 + "%");
-//                binding.pbCrawlerProgress.setProgress(0);
-//                binding.tvCrawlerStatus.setText("Bắt đầu crawl...");
-//                binding.tvSumProcessedUrls.setText(String.format("Số URL đã xử lý: %d", 0));
-//                binding.tvSoUrlTrenTotalUrl.setText(String.format("%d/%d", 0, 0));
-//                binding.tvInfoUrl.setText("");
-//                binding.tvElapsedTimes.setText(String.format("Thời gian trôi qua: %s", DateUtils.formatElapsedTime(0)));
-//                binding.tvTimeRemaining.setText(String.format("Thời gian còn lại: %s", DateUtils.formatElapsedTime(0)));
-//                // RESET CÁC THÔNG SỐ TRONG PREFS
-//                settingsRepository.saveSumCrawledUrlsCount(selectedCrawlType.getCrawledUrlsCountPrefKey(),0L);
-//                settingsRepository.saveCrawledUrlsStart1Count(selectedCrawlType.getCrawledUrlStart1sCountPrefKey(),0L);     //crawledUrlStar1Count
-//                // Reset lại time đã lưu
-//                settingsRepository.saveLongElapsedTime(selectedCrawlType, 0L);
-//
-//                //Thanm số: customCrawlString: CÓ THỂ KHÔNG CẦN, VÌ TRONG MyCrawlerWorker sẽ tính
-//                viewModelCrawlerGemini.startCrawler(selectedCrawlType, false, customCrawlString); // Truyền tên enum và chuỗi tùy chỉnh
+                // HỌC HỎI: Trước khi chạy mới, cần lấy chuỗi tùy chỉnh nếu đang ở chế độ CUSTOM
+                String customCrawlString = (selectedCrawlType == CrawlType.CUSTOM_STRING) ? settingsRepository.getCustomCrawlString() : "";
+                
+                // Kiểm tra nếu chọn Custom mà chưa nhập chuỗi thì báo lỗi
+                if (selectedCrawlType == CrawlType.CUSTOM_STRING && customCrawlString.isEmpty()) {
+                    Toast.makeText(this, "Vui lòng nhập chuỗi ký tự tùy chỉnh trong cài đặt.", Toast.LENGTH_LONG).show();
+                    return;
+                }
 
+                isCrawling = true;
+                binding.btnCrawlData.setText("Đang Crawl");
+                startCrawlTuDau(customCrawlString);
             }
 
 //        } else {    // NẾU ĐANG CHẠY:  CHỈ XAY RA KHI NHẤN LẦN 2,3N=.. LIÊN TIẾP NHƯNG NÚT NÀY ĐÃ BỊ DISABLE
@@ -1365,7 +1352,11 @@ private void confirmDeleteFile(File file) {
 //        }
     }
 
-    private void startCrawlTuDau() {
+    /**
+     * HỌC HỎI: Hàm này được tách ra để xử lý việc reset dữ liệu và bắt đầu một phiên cào mới hoàn toàn.
+     * @param customCrawlString Chuỗi ký tự tùy chỉnh (nếu có) được lấy từ Settings.
+     */
+    private void startCrawlTuDau(String customCrawlString) {
         // Đặt lại cờ HAS_CRAWL_STARTED về false khi bắt đầu một phiên mới hoàn toàn
         SharedPreferencesUtils.setHasCrawlStarted(getApplicationContext(), false);  // set false
         // reset Thanh diễn tiến = 0
@@ -1384,16 +1375,9 @@ private void confirmDeleteFile(File file) {
         settingsRepository.saveK0(selectedCrawlType.getK0PrefKey(),k0);
         settingsRepository.saveK1(selectedCrawlType.getK1PrefKey(),k1);
         settingsRepository.saveTotalUrls(selectedCrawlType.getTotalUrlsPrefKey(),k1-k0);
-            // handleWorkerSuccess thay cho đoạn sau
-//        settingsRepository.saveSumCrawledUrlsCount(selectedCrawlType.getCrawledUrlsCountPrefKey(),0L);
-//        settingsRepository.saveCrawledUrlsStart1Count(selectedCrawlType.getCrawledUrlStart1sCountPrefKey(),0L);     //crawledUrlStar1Count
-//        // Reset lại time đã lưu
-//        settingsRepository.saveLongElapsedTime(selectedCrawlType, 0L);
-                // End đoạn sau
 
-        //Thanm số: customCrawlString: CÓ THỂ KHÔNG CẦN, VÌ TRONG MyCrawlerWorker sẽ tính.
-        String customCrawlString ="";   //Tạm gán để chạy
-        viewModelCrawlerGemini.startCrawler(false, customCrawlString); // Truyền tên enum và chuỗi tùy chỉnh
+        // HỌC HỎI: Sử dụng customCrawlString được truyền vào thay vì gán rỗng.
+        viewModelCrawlerGemini.startCrawler(false, customCrawlString); 
     }
 
     private void updateUIForWorkInfo(WorkInfo workInfo) {
@@ -1486,7 +1470,7 @@ private void confirmDeleteFile(File file) {
     }
 
     private void resetDatabase(CrawlType crawlType) {
-        DBHelperThuoc_Old dbHelper = DBHelperThuoc_Old.getInstance(this);
+        DBHelperThuoc dbHelper = DBHelperThuoc.getInstance(this);
         //dbHelper.getDbPath();
         //FileUtils.deleteFileOrDirectory(new File(dbHelper.getDbPath())); //Delete file ThuocBietDuoc.db
         //SQLiteDatabase db = dbHelper.getWritableDatabase();
@@ -1638,6 +1622,11 @@ private void confirmDeleteFile(File file) {
 
             // Hỗ trợ lấy WorkInfo cho cả các bản Android mới nhất (Vanilla Ice Cream) (hỗ trợ cả API mới và cũ)
             WorkInfo workInfo = workInfos.get(0);
+
+            // HỌC HỎI: Cực kỳ quan trọng! Cần gọi updateProgressUI ở đây để cập nhật ProgressBar 
+            // và các thông số text mỗi khi WorkManager gửi dữ liệu tiến độ (Data progress) về.
+            updateProgressUI(workInfo);
+
             WorkInfo.State state = workInfo.getState();
 
             Log.d(TAG, "Worker State: " + state);
@@ -2590,18 +2579,6 @@ private void confirmDeleteFile(File file) {
         }
 
         Log.d(TAG, "MainActivity.onDestroy() called");
-
-        if (writerEngine != null) {
-            writerEngine.stop(); // dừng loop
-        }
-        if (dbHelperThuoc != null) {
-            SQLiteDatabase db = dbHelperThuoc.getDb();    //SQLiteDatabase db = dbHelperThuoc.getWritableDatabase();
-            if (db.isOpen()) {
-                db.close();
-                Log.d(TAG, "Database closed safely.");
-            }
-        }
-
     }
 
     // CHỈNH SỬA: Thêm phương thức này để xử lý reset khi worker SUCCEEDED

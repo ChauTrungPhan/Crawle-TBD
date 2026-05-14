@@ -61,8 +61,8 @@ public class ExportViewModel extends AndroidViewModel  {
     public LiveData<String> getExportStatus() { return exportStatus; }
 
     //private ExcelExporter exporter;
-    private ExcelExporterOptimized_goc excelExporterOptimized;
-    private final DBHelperThuoc_Old dbHelperThuoc; // Để quản lý cơ sở dữ liệu
+    private ExcelExporterOptimized excelExporterOptimized;
+    private final DBHelperThuoc dbHelperThuoc; // Để quản lý cơ sở dữ liệu
     //private SQLiteDatabase dbThuoc;
 
     private final Context applicationContext; // Thêm biến này để lưu application context
@@ -77,16 +77,16 @@ public class ExportViewModel extends AndroidViewModel  {
         // Khởi tạo executorService ở đây nếu chưa có
         excelExecutor = Executors.newSingleThreadExecutor();
         //
-        dbHelperThuoc = DBHelperThuoc_Old.getInstance(this.applicationContext); // Hoặc bạn có thể nhận nó qua constructor nếu đang dùng Factory
+        dbHelperThuoc = DBHelperThuoc.getInstance(this.applicationContext); // Hoặc bạn có thể nhận nó qua constructor nếu đang dùng Factory
 
         this.settingsRepository = new SettingsRepository(application); // Khởi tạo SettingsRepository
         // exporter = new ExcelExporter(executorService, application);
         // Khởi tạo excelExporterOptimized ngay trong constructor
-        excelExporterOptimized = new ExcelExporterOptimized_goc(excelExecutor, applicationContext);
+        excelExporterOptimized = new ExcelExporterOptimized(excelExecutor, applicationContext);
     }
 
     // CHỈNH SỬA: Phương thức mới để bắt đầu xuất Excel
-    public void exportToExcel(boolean isXmlExport, DBHelperThuoc_Old dbHelper ,
+    public void exportToExcel(boolean isXmlExport, DBHelperThuoc dbHelper ,
                               String tableName, String filePath) {
         //SQLiteDatabase db = dbHelper.getReadableDatabase();
 
@@ -141,7 +141,7 @@ public class ExportViewModel extends AndroidViewModel  {
             /// /////////////////////////////////////////////////////////////////////////
             //excelExporterOptimized thay thế cho exporter
             if (excelExporterOptimized == null) {
-                excelExporterOptimized = new ExcelExporterOptimized_goc(Executors.newSingleThreadExecutor(), applicationContext);
+                excelExporterOptimized = new ExcelExporterOptimized(Executors.newSingleThreadExecutor(), applicationContext);
             }
 
             // Chọn 3 cách: exportDataToExcelXlsx, exportToXlsxOptimized

@@ -8,9 +8,10 @@ import androidx.room.RoomDatabase;
 
 
 // Đảm bảo bạn đã khai báo các entity và version
-@Database(entities = {WorkState.class}, version = AppConstants.DATABASE_VERSION) // Tăng version từ 1 lên 2
+@Database(entities = {WorkState.class, ThuocRoom.class}, version = AppConstants.DATABASE_VERSION) // Đã thêm ThuocRoom
 public abstract class AppDatabase extends RoomDatabase {
     public abstract WorkStateDao workStateDao();
+    public abstract ThuocRoomDao thuocRoomDao(); // Đã thêm DAO cho ThuocRoom
 
     // Singleton instance
     private static volatile AppDatabase INSTANCE;

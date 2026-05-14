@@ -35,7 +35,7 @@ public class ErrorListActivity extends AppCompatActivity {
         binding.recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
         //DBHelperThuoc dbHelper = new DBHelperThuoc(this);
-        DBHelperThuoc_Old dbHelper = DBHelperThuoc_Old.getInstance(this.getApplicationContext());
+        DBHelperThuoc dbHelper = DBHelperThuoc.getInstance(this.getApplicationContext());
         CrawlType crawlType = new SettingsRepository(this.getApplicationContext()).getSelectedCrawlType();
         List<ErrorUrl> errors = dbHelper.getListErrorUrls(crawlType);
 

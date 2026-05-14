@@ -479,12 +479,31 @@ public class Utils {
         tv.setText(text);
     }
     public static String getKyTuSeach(String url) {
-
-       return "key" + url.split("key")[1].replace("+", " ");    // Phòng url có dấu "+" thay khoảng trắng
+        if (url == null || !url.contains("key")) return "";
+        try {
+            Uri uri = Uri.parse(url);
+            String key = uri.getQueryParameter("key");
+            return (key != null) ? "key" + key.replace("+", " ") : "";
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing key from URL: " + url, e);
+            // Fallback nếu Uri.parse lỗi
+            String[] parts = url.split("key");
+            if (parts.length > 1) return "key" + parts[1].split("&")[0].replace("+", " ");
+            return "";
+        }
     }
 
     public static String getMaThuocUrlCha(String url) {
-        //String maThuocP = "https://www..." +"key" + url.split("key")[1];
-        return "https://www..." +"key" + url.split("key")[1];
+        if (url == null || !url.contains("key")) return "https://www...key_unknown";
+        try {
+            Uri uri = Uri.parse(url);
+            String key = uri.getQueryParameter("key");
+            return (key != null) ? "https://www...key" + key : "https://www...key_unknown";
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing ma_thuoc from URL: " + url, e);
+            String[] parts = url.split("key");
+            if (parts.length > 1) return "https://www...key" + parts[1].split("&")[0];
+            return "https://www...key_unknown";
+        }
     }
 }

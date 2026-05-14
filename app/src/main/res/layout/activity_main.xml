@@ -11,7 +11,7 @@
     <!-- AppBarLayout remains fixed at the top -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fitsSystemWindows="true"
         app:layout_constraintEnd_toEndOf="parent"
