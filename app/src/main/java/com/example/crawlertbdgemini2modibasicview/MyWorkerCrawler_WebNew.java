@@ -351,7 +351,7 @@ public class MyWorkerCrawler_WebNew extends Worker {
                 // 1/ Cũ
                 //forkJoinPool.invoke(new UrlCrawlRecursiveAction(urlInfoQueueList));// cỦA GEMINI
 
-                forkJoinPool.invoke(new MyWorkerCrawler_WebNew.CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
+                forkJoinPool.invoke(new CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
                         crawledUrlStar1Count, runtime, isCancelled)); // truyền dbHelperThuoc thay vì dbThuoc
 
                 forkJoinPool.shutdown();

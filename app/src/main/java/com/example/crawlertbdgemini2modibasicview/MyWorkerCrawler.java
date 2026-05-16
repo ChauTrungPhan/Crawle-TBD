@@ -80,7 +80,48 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-public class MyWorkerCrawler extends Worker {
+/** Kiến trúc này gồm:
+ * PageProducer
+ *     ↓
+ * BlockingQueue
+ *     ↓
+ * PageConsumer (đa luồng)
+ *     ↓
+ * ConcurrentHashMap chống trùng
+ *     ↓
+ * SQLite queue
+ *
+ * Kiến trúc production mạnh nhất
+ * Page Producer
+ *     ↓
+ * Detail Queue
+ *     ↓
+ * SQLite State
+ *     ↓
+ * Resume Safe
+ *
+ * Hỗ trợ:
+ *
+ * crawl đa luồng,
+ * pagination động,
+ * tự phát hiện page cuối,
+ * chống loop,
+ * chống trùng,
+ * chạy tốt trên Android.
+ */
+public class MyWorkerCrawler extends Worker {   //WorkManager
+    /** Crawler production Android thật thường:
+     * WorkManager
+     *     ↓
+     * Foreground Worker
+     *     ↓
+     * SQLite persistent queue
+     *     ↓
+     * Checkpoint
+     *     ↓
+     * Crash-safe resume
+     */
+
     private static final String TAG = "MyWorkerCrawler";
     // XEM
     AtomicInteger numPacket = new AtomicInteger(0);
@@ -122,9 +163,15 @@ public class MyWorkerCrawler extends Worker {
     private long currentSessionStartTime;
     private long lastSavedCumulativeElapsedTime;
     private final AtomicBoolean isCancelled = new AtomicBoolean(false);
-    //
-    public MyWorkerCrawler(@NonNull Context context, @NonNull WorkerParameters workerParams) {
-        super(context, workerParams);
+    // Mới
+    private final List<Thread> consumers =
+            new ArrayList<>();
+
+    private PageProducer producer;
+
+    // end Mới
+    public MyWorkerCrawler(@NonNull Context context, @NonNull WorkerParameters params) {
+        super(context, params);
 
         this.context = context.getApplicationContext();
         lastUpdateTime.set(0);      // Tránh bị lưu giũ giá trị của phiên trước: CẦN THIẾT KHÔNG?
@@ -157,12 +204,6 @@ public class MyWorkerCrawler extends Worker {
         WorkStateDao workStateDao = AppDatabase.getInstance(context).workStateDao(); // Khởi tạo WorkStateDao
         crawledUrlCount = new AtomicLong(0);    //crawledUrlCount=whichProcessedUrlsStart1_count
         /// ///
-        // Tải URL đã hoàn thành từ DB khi Worker khởi tạo
-        // THAY THẾ DÒNG NÀY:
-        //loadCompletedUrls(visitedUrls, dbHelperThuoc.getWritableDatabase());
-        // BẰNG DÒNG NÀY:
-        //loadCompletedUrls(visitedUrls); // Gọi phương thức đã sửa đổi
-
         Log.d(TAG, "Loaded " + visitedUrls.size() + " completed URLs.");
 
         // Trong constructor:
@@ -191,7 +232,7 @@ public class MyWorkerCrawler extends Worker {
      * It will display a notification
      * So that we will understand the work is executed
      * */
-// Helper method để lấy List<String[]> từ inputData
+    // Helper method để lấy List<String[]> từ inputData
     private List<String[]> getUrlsFromInputData() {
         String urlsJson = getInputData().getString(KEY_LIST_ROW_URLS_JSON);
         if (urlsJson == null || urlsJson.isEmpty()) {
@@ -211,364 +252,114 @@ public class MyWorkerCrawler extends Worker {
     @NonNull
     @Override
     public Result doWork() {
-        Log.d(TAG, "doWork: MyWorkerCrawler started. Initial lastUpdateTime: " + lastUpdateTime.get());
-
-        totalUrlsToCrawl = settingsRepository.getTotalUrls(selectedCrawlType.getTotalUrlsPrefKey()); // HOẶC = k1-k0
-        //totalUrlsToCrawl = urlInfoQueueList.size();
-        // hoặc : PHAI LẤY TỪ LƯU VÌ KHI THOÁT ĐỘT NGỘT: TẠI SAO =0? AI SET = 0?:
-        // XẢY RA TR0NG internalWorkInfoObserver của MyViewModelCrawler_Gemini
-
-        // lẤY TỪ k0, k1 đã lưu trong prefs
-//        totalUrlsToCrawl = settingsRepository.getK1(selectedCrawlType.getK1PrefKey(),"")
-//                - settingsRepository.getK0(selectedCrawlType.getK0PrefKey());
-
-        // 1️⃣ Bật foreground service NGAY TỪ ĐẦU: setForegroundAsync: Chạy trong doWork càng sớm càng tốt
-        //createNotificationChannel();    // Đã được khai báo và khởi động ở MyApplication
-        setForegroundAsync(createForegroundInfo(0, totalUrlsToCrawl, null, "")); // "Đang khởi tạo..."
-        //setForegroundAsync(createForegroundInfo(0, "Đang chuẩn bị crawl..."));
-        // 2️⃣ Bỏ qua tối ưu pin nếu chưa bật
-        requestIgnoreBatteryOptimizations();
-
-        // Luôn khởi tạo startTime ở đầu mỗi lần doWork() được gọi
-        // Điều này quan trọng nếu Worker được retry
-        //startTime = System.currentTimeMillis();
-        // 1. Lấy tổng thời gian đã trôi qua từ phiên trước đó (nếu có)
-        // Giả sử settingsRepository của bạn có phương thức getLong cho SharedPreferences
-        lastSavedCumulativeElapsedTime = settingsRepository.getLongElapsedTime(selectedCrawlType);
-
-        // 2. Lưu thời gian bắt đầu của phiên Worker HIỆN TẠI
-        currentSessionStartTime = System.currentTimeMillis();
-
-
-        //try {   // Có thể không cần
-            Log.d(TAG, "doWork: started.");
-            // Gọi mạng....
-
-            // 1. Kiểm tra trạng thái cờ HAS_CRAWL_STARTED
-            boolean hasCrawlStartedBefore = SharedPreferencesUtils.getHasCrawlStarted(context);
-            Log.d(TAG, "HAS_CRAWL_STARTED flag: " + hasCrawlStartedBefore);
-
-            // ... (Logic khởi tạo và kiểm tra ban đầu)
-            // Khởi tạo loại crawl từ SettingsRepository
-            currentTableThuocName = selectedCrawlType.getTableThuocName();
-        //getUrlQueueTableName. THAY THẾ CHO TÊN: initUrlsTable
-        //String urlQueueTableName = selectedCrawlType.getUrlQueueTableName();
-
-            // 2. Lấy danh sách các URL đang chờ xử lý từ DB (STATUS = 0) và biến urlInfoQueueList
-            List<UrlInfo> urlInfoQueueList;
-            boolean tiepTuc = getInputData().getBoolean("TIEP_TUC", false);
-
-            if (!hasCrawlStartedBefore) {   // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
-                // Đây là lần đầu tiên chạy hoặc sau khi reset hoàn toàn (chưa có URL nào trong DB)
-                Log.d(TAG, "Initial crawl: Database is empty. Seeding initial URLs.");
-                // Cần lấy danh sách URL ban đầu (allInitialUrls) từ đâu đó (ví dụ: MainActivity)
-                // Hoặc nó được lưu trong một Preference khác hoặc một file assets
-                // 1. Khôi phục visitedUrls (tất cả các URL đã hoàn thành từ các phiên trước)
-                // Đây là cách bạn tránh cào lại các URL đã hoàn thành, ngay cả sau khi app bị tắt.
-                if (!tiepTuc) { // KHÔNG TIẾP TUC, CHẠY PHIÊN MỚI HOÀN TOÀN
-                    // Lấy lại từ đầu theo k0,k1 (Phải delete All records bảng Queue)
-                    urlInfoQueueList = dbHelperThuoc.getListQueueUrls(settingsRepository);    //getListQueueUrlFromCrawlType
-                    // Cập nhật tổng số URL ban đầu: KHI LẤY MỚI DỰA THEO k0, k1. CẦN KHÔNG: VÌ totalURL = k1 - k0
-                    settingsRepository.saveTotalUrls(selectedCrawlType.getTotalUrlsPrefKey(), urlInfoQueueList.size());
-                    // Các thông số khác xem như =0, hoặc null
-
-                    // Đặt cờ là đã bắt đầu crawl
-                    SharedPreferencesUtils.setHasCrawlStarted(context, true);
-                } else {    //true
-                    //Lấy lại thông số cũ
-                    List<UrlInfo> completedUrlInfos = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 1);
-                    for (UrlInfo urlInfo : completedUrlInfos) {
-                        visitedUrls.add(urlInfo.getUrl());
-                    }
-                    Log.d(TAG, "Restored " + completedUrlInfos.size() + " completed URLs to visited set.");
-
-                    urlInfoQueueList = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 0);
-
-                }
-
-            } else { // Worker tự động chạy khi app khởi động lại (app bị thoát đột ngột, bị hệ thống kill
-                // Lấy lại các thông số cũ
-                List<UrlInfo> completedUrlInfos = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 1);
-                for (UrlInfo urlInfo : completedUrlInfos) {
-                    visitedUrls.add(urlInfo.getUrl());
-                }
-                Log.d(TAG, "Restored " + completedUrlInfos.size() + " completed URLs to visited set.");
-
-                urlInfoQueueList = dbHelperThuoc.getDetailedUrlInfoByStatus(selectedCrawlType.getUrlQueueTableName(), 0);
-                Log.d(TAG, "Found " + urlInfoQueueList.size() + " pending URLs from DB.");
-                if (urlInfoQueueList.isEmpty()) {
-                    Log.d(TAG, "No pending URLs in DB. Crawl might be complete or needs initial seeding.");
-                    // Logic cho lần chạy đầu tiên hoặc khi hoàn thành (SUCCEED):
-                    // Bạn cần kiểm tra một cờ trong SharedPreferences (ví dụ: HAS_CRAWL_STARTED)
-                    // Nếu chưa từng start, thì đây là lúc nạp các URL ban đầu vào DB và khởi tạo pendingUrlInfos
-                    // (Như đã thảo luận ở phần "StartCrawl" của người dùng)
-                    // ... (Logic kiểm tra và chèn URL ban đầu nếu cần) ...
-//                if (urlInfoQueueList.isEmpty()) { // Nếu vẫn rỗng sau khi thử seed
-//                    Log.d(TAG, "Crawl finished successfully or no initial URLs to process.");
-                    return Result.success();
-//                }
-
-                }
-
-            }
-
-//            startTime = System.currentTimeMillis(); // đẠT CHỖ NÀY?
-//            Log.d(TAG, "doWork started for " + selectedCrawlType.name());
-            // Mới
-            // Khởi tạo số lượng lấy từ prefs đã lưu
-                    // a/ URL (start=1) đã cào thành công từ SharedPreferences của phiên trước
-            crawledUrlStar1Count = new AtomicLong(settingsRepository.getCrawledUrlsStart1Count(
-                    selectedCrawlType.getCrawledUrlStart1sCountPrefKey()));
-            // XEM: KIỂM TRA SỐ crawledUrlStar1Count CCOS ĐÚNG KHÔNG? TAI SAO TỔNG crawledUrlStar1Count <> tOtAL
-                    // b/ Tổng số url chung đã xử lý (cào) được
-            crawledUrlCount = new AtomicLong(settingsRepository.getSumCrawledUrlsCount(
-                    selectedCrawlType.getCrawledUrlsCountPrefKey()
-            ));
-            // Tính lại từ đầu percent
-            percent = (int) (crawledUrlStar1Count.get() * 100.0 / (totalUrlsToCrawl==0?1:totalUrlsToCrawl));
-            long finalCumulativeElapsedTime = 0; // Thay thế finalElapsedTime bằng finalCumulativeElapsedTime
 
         try {
-            // Chạy trước để ghi data vào sqlite: THẤT BẠI DO 2 LỆNH NÀY
-            CrawlRuntime runtime = new CrawlRuntime(getApplicationContext());
-            runtime.start();
 
-            // 3. Khởi tạo ForkJoinPool
-            Log.d(TAG, "doWork: Total URLs to process (from initUrlsTable excluding completed): " + urlInfoQueueList.size());
-            Log.d(TAG, "doWork: Starting ForkJoinPool with " + Runtime.getRuntime().availableProcessors() + " processors.");
-            ForkJoinPool forkJoinPool = new ForkJoinPool();
+            resetGlobalState();
 
-            //try {
-            if (!urlInfoQueueList.isEmpty()) {    // Đã kiểm soat ở trên
-                // Trước khi chạy forkJoinPool.submit: CẦN KHÔNG?
-                if (isStopped()) {
-                    isCancelled.set(true);
-                    Log.d("MyWorkerCrawler", "Work cancelled before execution: " + getId());
-                    return Result.failure();
-                }
+            // Start Producer
+            producer = new PageProducer();
+            producer.start();
 
-                // 1/ Cũ
-                //forkJoinPool.invoke(new UrlCrawlRecursiveAction(urlInfoQueueList));// cỦA GEMINI
+            // Start Consumers
+            int THREAD_COUNT = 5;
 
-                        forkJoinPool.invoke(new CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
-                                crawledUrlStar1Count, runtime, isCancelled)); // truyền dbHelperThuoc thay vì dbThuoc
+            for (int i = 0; i < THREAD_COUNT; i++) {
 
-                forkJoinPool.shutdown();
-                //forkJoinPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-                runtime.stop();
-                Log.d(TAG, "doWork: ForkJoinPool shut down.");
+                PageConsumer consumer =
+                        new PageConsumer();
 
-                //2. Mới; ĐỂ NHẬN LỖI THROW RA
-                // Thay invoke = submit
-                // CHÚ Ý: KHÔNG LẤY END (LẤY TỪ START ĐẾN < END)
-//                        Future<?> future = forkJoinPool.submit(new CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
-//                                crawledUrlStar1Count,
-//                                dbHelperThuoc, selectedCrawlType, isCancelled )); // truyền dbHelperThuoc thay vì dbThuoc
+                consumer.setName(
+                        "Consumer-" + i
+                );
 
-                /// /////////
-//                ForkJoinTask<?> task = forkJoinPool.submit(new CrawlRecursiveAction(urlInfoQueueList, 0, urlInfoQueueList.size(),
-//                        crawledUrlStar1Count, runtime, isCancelled)); // truyền dbHelperThuoc thay vì dbThuoc
-//                try {   // Cần không?
-//                    // Giám sát: cancel nếu WorkManager yêu cầu dừng
-//                    while (!task.isDone()) {
-//                        if (isStopped()) {
-//                            // Giám sát: cancel nếu WorkManager yêu cầu dừng
-//                            isCancelled.set(true);
-//                            task.cancel(true);  // gửi cancel tới task
-//                            forkJoinPool.shutdownNow(); // Cố gắng DỪNG NGAY LẶP TỨC: Gửi interrupt tới các thread pool
-//                            Log.d("MyWorkerCrawler", "Work cancelled during execution: " + getId());
-//                            // Lưu trạng thái tổng quan nếu muốn
-//                            return Result.failure();
-//                        }
-//                        Thread.sleep(150);  // Nên nhẹ nhàng, 100-300ms hợp lý
-//                    }
-//
-//                    // Đã done → join để ném exception nếu có
-//                    try { // Cần . try-CATCH: CHỦ YẾU Ở ĐÂY ĐỂ BẮT LỖI
-//                        // chờ toàn bộ task crawl hoàn tất: task.join() hay task.get)
-//                        //future.get();
-//                        //task.join(); // ném RuntimeException nếu compute() throw. TẠI SAO VẪN CÒN THRED CHẠY?
-//                        task.get();
-//                        //runtime.stop();   // ✅ an toàn vì toàn bộ RecursiveAction đã kết thúc
-//                        Log.d(TAG, "Work completed: " + getId());
-//                        return Result.success();
-//                    } catch (RuntimeException re) {
-//                        Log.e("MyWorker", "Error in task: ", re);
-//                        Throwable cause = re.getCause() != null ? re.getCause() : re;
-//                        // tốt nhất: duyệt cả chuỗi cause để robust (nếu bị wrap nhiều lớp)
-//                        if (containsCause(cause, UnknownHostException.class)) {
-//                            // Thường xảy ra SAU SocketTimeoutException
-//                            // Mạng đứt / DNS fail
-//                            setProgressAsync(new Data.Builder().putString("status", "RETRY_NETWORK").build());
-//                            return Result.retry();
-//                        } else if (containsCause(cause, SocketTimeoutException.class)) {
-//                            // Thường xảy ra trước UnknownHostException: ỪNG NÉM LỖI NÀY RA
-//                            // Timeout (có thể mạng yếu hoặc server chậm)
-//                            Log.d(TAG, "doWork: url TIMEOUT" + re.getCause());
-//                            //setProgressAsync(new Data.Builder().putString("status","RETRY_NETWORK").build());
-//                            //return Result.retry(); TIẾP TỤC CHẠY URL KẾ TIẾP
-//                        } else if (containsCause(cause, HttpStatusException.class)) {
-//                            // HTTP error (không phải mất mạng)
-//                            Log.d(TAG, "doWork: HttpStatusException=" + re.getCause());
-//                            setProgressAsync(new Data.Builder().putString("status", "RETRY_NETWORK").build());
-//                            return Result.retry();
-//
-//                        } else if (containsCause(cause, InterruptedIOException.class) || containsCause(cause, InterruptedException.class)) {
-//                            // interrupt / cancel
-//                            // Bị interrupt -> coi là cancel / failure hoặc retry tùy logic
-//                            return Result.failure();
-//                            //} else if (containsCause(cause, IOException.class)) {   // Cuối cùng hoặc
-//                        } else {
-//                            // Lỗi khác
-//                            return Result.failure(); // IO khác -> fail
-//                        }
-//                    }
-//                    /// //
-//
-//                    if (isStopped()) {
-//                        Log.d("MyWorkerCrawler", "Work cancelled after execution: " + getId());
-//                        return Result.failure();
-//                    }
-//
-//
-//                } catch (InterruptedException ie) {
-//                    Log.e("MyWorker", "Error in doWork: ", ie);
-//                    Thread.currentThread().interrupt();
-//                    return Result.failure();
-//                } catch (Exception e) {
-//                    Log.e(TAG, "Lỗi trong ForkJoinPool: " + e.getMessage(), e);
-//                    // Cập nhật trạng thái lỗi nếu cần
-//                    return Result.failure(new Data.Builder().putString("error", e.getMessage()).build());
-//                } finally {
-//                    /**
-//                     * Lệnh forkJoinPool.shutdown(); là rất quan trọng. Nó bắt đầu quá trình tắt của ForkJoinPool,
-//                     * ngăn không cho các tác vụ mới được gửi đi và cho phép các tác vụ đang chạy hoàn thành trước khi các luồng trong pool kết thúc.
-//                     * Việc không tắt pool có thể dẫn đến rò rỉ tài nguyên (các luồng vẫn hoạt động trong nền
-//                     * ngay cả khi công việc của chúng đã xong) và ảnh hưởng đến hiệu suất hệ thống.
-//                     * Ý nghĩa: Khối finally đảm bảo rằng ForkJoinPool luôn được tắt một cách gọn gàng
-//                     * sau khi MyWorkerCrawler hoàn thành công việc của nó
-//                     * (dù thành công hay thất bại), giúp giải phóng các luồng và tài nguyên hệ thống
-//                     * đã được sử dụng.
-//                     */
-//                    runtime.stop();
-//                    forkJoinPool.shutdownNow();
-//                    Log.d(TAG, "doWork: ForkJoinPool shut down.");
-//                }
-                ///////////////
+                consumer.start();
 
-            } else {
-                Log.d(TAG, "doWork: No new URLs to process in this batch.");
+                consumers.add(consumer);
             }
 
+            // Chờ crawler finish
+            waitUntilFinished();
 
-            // Cập nhật trạng thái cuối cùng sau khi hoàn thành hoặc có lỗi
+            System.out.println(
+                    "TOTAL DRUGS = "
+                            + GlobalState.DRUG_MAP.size()
+            );
 
-            if (crawledUrlStar1Count.get() >= totalUrlsToCrawl) {
-                Log.d(TAG, "doWork: Crawler completed all URLs successfully." +
-                        "\n* crawledUrlStar1Count.get()=" + crawledUrlStar1Count.get() +
-                        "\n* totalUrlsToCrawl=" + totalUrlsToCrawl +
-                        "\n* Chênh lệch totalUrlsToCrawl - crawledUrlStar1Count.get() =" + (totalUrlsToCrawl - crawledUrlStar1Count.get()));
+            return Result.success();
 
-                //
-                // --- Sau khi tất cả công việc đã hoàn thành ---
-                // Thời gian cuối cùng đã trôi qua sẽ là tổng thời gian cộng dồn
-                finalCumulativeElapsedTime = lastSavedCumulativeElapsedTime + (System.currentTimeMillis() - currentSessionStartTime);
+        } catch (Exception e) {
 
-                //long finalElapsedTime = System.currentTimeMillis() - startTime; // Thời gian tổng cộng đã trôi qua
-                Data progressData = new Data.Builder()
-                        //Xem
-                        .putInt(AppConstants.WORK_PROGRESS_PERCENT, 100)   //percent
-                        //
-                        .putLong(selectedCrawlType.getCrawledUrlsCountPrefKey().name(), crawledUrlCount.get())   //iSumProcessedUrlsCount
-                        .putLong(selectedCrawlType.getCrawledUrlStart1sCountPrefKey().name(), crawledUrlStar1Count.get())
-                        .putLong(selectedCrawlType.getTotalUrlsPrefKey().name(), totalUrlsToCrawl)
+            e.printStackTrace();
 
-                        .putString(AppConstants.URL_CURRENT, lastCurrentUrl)
-                        .putLong(AppConstants.WORK_ELAPSED_TIME, finalCumulativeElapsedTime) // <-- Đảm bảo thời gian tổng cộng được đưa vào outputData
-                        // Thông tin Threads
-                        .putInt("completedTasks", completedTasks.get())
-                        .putString("message", "Chau Crawl thành công")
-                        .build();
-                //setProgressAsync(new Data.Builder().putInt(AppConstants.WORK_PROGRESS_PERCENT, 100).build());
-                //setProgressAsync(progressData);
-                //KHÔNG CÓ TÁC DỤNG: VÌ CHẬM HƠN SUCCESS
-                //setProgressAsync(progressData).get(); // Sử dụng .get() để đảm bảo nó hoàn thành trước khi return
+            return Result.failure();
+        }
+    }
 
-                // Nếu thành công: reset lại các thông số
-                // KHÔNG NÊN RESET Ở ĐÂY, SẼ LÀM THAY ĐỔI UI KHI RESUME(ĐÃ HOÀN THÀNH)
-                // KHI CHẠY CRAWL MỚI THÌ RESET
-                //                settingsRepository.saveSumCrawledUrlsCount(selectedCrawlType.getCrawledUrlsCountPrefKey(),0L);
-                //                settingsRepository.saveCrawledUrlsStart1Count(selectedCrawlType.getCrawledUrlStart1sCountPrefKey(),0L);     //crawledUrlStar1Count
-                //                // Reset lại time đã lưu
-                //                settingsRepository.saveLongElapsedTime(selectedCrawlType, 0L);
-                // CHỈ RESET WorkRequestId
-                settingsRepository.clearWorkRequestId(selectedCrawlType.getWorkIdPrefKey());    // Trong SQLITE
-                //Trong Room
-                //                AppDatabase appDatabase = AppDatabase.getInstance(context); // Lấy thể hiện của Room Database
-                //                workStateDao = appDatabase.workStateDao(); // Lấy DAO
-                //                workStateDao.deleteByWorkId(selectedCrawlType.getWorkIdPrefKey(), re);   // Đảm bảo workStateDao được khởi tạo và có sẵn
+    // Mới
+    private void waitUntilFinished() {
 
-                // Có thể thêm một Thread.sleep ngắn ở đây (ví dụ 100-200ms) nếu Worker kết thúc QUÁ NHANH,
-                // nhưng .get() thường là đủ để chờ setProgressAsync hoàn tất việc gửi dữ liệu.
-                // Nếu bạn không muốn block, có thể bỏ .get() nhưng chấp nhận rủi ro nhỏ
-                // là UI không kịp nhận 100% nếu WorkManager quá tải hoặc UI không kịp xử lý.
-                //Thread.sleep(2000);   // Mới có tác dụng
+        while (!GlobalState.STOP.get()) {
 
+            try {
 
-                //                return Result.success(createOutputData(true, "Worker hoàn thành thành công!",
-                //                        crawledUrlStar1Count.get(), crawledUrlCount.get(), totalUrlsToCrawl, finalCumulativeElapsedTime));
-                return Result.success(progressData);
-            } else {
-                Log.d(TAG, "doWork: KẾT THÚC: Crawler finished, but some URLs might remain or failed." +
-                        "\n* crawledUrlStar1Count.get()=" + crawledUrlStar1Count.get() +
-                        "\n* totalUrlsToCrawl=" + totalUrlsToCrawl +
-                        "\n* Chênh lệch totalUrlsToCrawl - crawledUrlStar1Count.get() =" + (totalUrlsToCrawl - crawledUrlStar1Count.get()));
+                Thread.sleep(1000);
 
-                //Thread.sleep(2000);   // Mới có tác dụng
-                //return Result.success(); // Hoặc Result.retry() nếu muốn thử lại
-                // Nếu mọi thứ thành công
-                return Result.success(createOutputData(true, "Vẫn cồ thiếu một số. Worker hoàn thành thành công!"));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        // Stop producer
+        if (producer != null) {
+
+            producer.interrupt();
+        }
+
+        // Stop consumers
+        for (Thread t : consumers) {
+
+            t.interrupt();
+        }
+
+        // Join producer
+        try {
+
+            if (producer != null) {
+
+                producer.join();
             }
 
         } catch (Exception e) {
-            Log.e("Worker", "Lỗi trong doWork()", e);
-            return Result.failure();
+            e.printStackTrace();
         }
 
+        // Join consumers
+        for (Thread t : consumers) {
 
-        // End Mới
+            try {
 
-                // CŨ \\\\\\\\\\\/////////\\\\\\\\///////
-                // Cờ này LUÔN LUÔN là true nếu WorkRequest này được tạo ban đầu với cờ đó
-    //            boolean isFirstRunForThisWorkRequest = getInputData().getBoolean(AppConstants.KEY_IS_FIRST_RUN, false);
-    //            // Kiểm tra trạng thái lưu trữ bền vững để xác định đây có phải là lần tiếp tục không
-    //            boolean hasBeenStartedBefore = prefs.getBoolean(KEY_HAS_BEEN_STARTED_BEFORE, false);
-//        } catch (RuntimeException e) {
-//            if (e.getCause() instanceof IOException) {
-//                // Đứt mạng → retry
-//                setProgressAsync(new Data.Builder()
-//                        .putString("status", "RETRY_NETWORK")
-//                        .build());
-//                return Result.retry();
-//            } else {
-//                return Result.failure();
-//            }
-//
-//        } catch (Exception e) {
-////            Log.e(TAB, "Error in doWork: " + e.getMessage());
-////            try {
-////                Thread.sleep(2000);   // Mới có tác dụng
-////            } catch (InterruptedException ex) {
-////                throw new RuntimeException(ex);
-////            }
-////            return Result.failure();
-//            // Khi có lỗi xảy ra
-//            Log.e(TAG, "Worker failed: " + e.getMessage(), e);
-//            // Gửi thông điệp lỗi qua outputData
-//            return Result.failure(createOutputData(false, "Lỗi trong quá trình xử lý: " + e.getMessage()));
-//        }
+                t.join();
 
-    } // End doWork()
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void resetGlobalState() {
+
+        GlobalState.STOP.set(false);
+
+        GlobalState.EMPTY_PAGE_COUNT.set(0);
+
+        GlobalState.DUPLICATE_PAGE_COUNT.set(0);
+
+        GlobalState.DRUG_MAP.clear();
+
+        PageQueueManager.PAGE_QUEUE.clear();
+    }
+    //end Mói
 
     @Override
     public void onStopped() {

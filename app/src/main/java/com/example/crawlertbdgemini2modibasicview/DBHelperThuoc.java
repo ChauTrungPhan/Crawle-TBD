@@ -324,14 +324,12 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         // 1. Tạo bảng Cha
         db.execSQL(String.format(CREATE_PARENT_URLS, parentTableName));
 
-        // 2. Tạo bảng Con (Child)
+        // 2. Tạo bảng Con (Child): lưu thuốc Thuốc đã crawl
         String createChildSql = createThuoc2kt_child
                 .replace(TABLE_THUOC_2KT, childTableName)
                 .replace(TABLE_PARENT_URLS_2KT, parentTableName);
         db.execSQL(createChildSql);
 
-        // 3. Tạo bảng Queue
-        db.execSQL(String.format(CREATE_URL_QUEUE_COMMON, queueTableName));
 
         // --- CÁC CHỈ MỤC (INDEX) BẮT BUỘC ĐỂ CHẠY NHANH ---
         // 4. TẠO INDEX (Sử dụng suffix để tên Index không bị trùng)
@@ -366,7 +364,7 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         // Các bảng bổ trợ khác (Checkpoint...)
         //db.execSQL("CREATE TABLE IF NOT EXISTS CrawlCheckpoint (...)");
 
-        //3. Checkpoint bền vững để phục hồi
+        //3. Checkpoint bền vững để phục hồi: DÙNG GHI EXCEL
         //Thêm bảng checkpoint (tuỳ chọn nhưng rất hữu ích):
         db.execSQL("CREATE TABLE IF NOT EXISTS CrawlCheckpoint (" +
                 "  id INTEGER PRIMARY KEY CHECK (id=1), " +
@@ -376,81 +374,19 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
                 "  version INTEGER DEFAULT 1);"
         );
 
+        //4. Mói
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS crawl_state (" +
+                        "id INTEGER PRIMARY KEY," +
+                        "current_page INTEGER)"
+        );
 
-        /* Cũ
-            // CŨ. 1. PP DÙNG CHA-CON Tạo Bản CON Thuoc
-            //1.1 Tạo Bản Cha Parent
-            String create_parent_urls = String.format(CREATE_PARENT_URLS, TABLE_PARENT_URLS_2KT);
-            db.execSQL(create_parent_urls);
-            db.execSQL(create_parent_urls.replace(TABLE_PARENT_URLS_2KT, TABLE_PARENT_URLS_3KT));
-            db.execSQL(create_parent_urls.replace(TABLE_PARENT_URLS_2KT, TABLE_PARENT_URLS_CUSTOM));
-            // INDEX CHO STATUS, LEVEL: nếu sau này có query lọc nhiều theo status/level.
-            //db.execSQL("CREATE INDEX idx_parent_status ON " + TABLE_PARENT_URLS_2KT + "(" + STATUS + ");");
-            //db.execSQL("CREATE INDEX idx_parent_level ON " + TABLE_PARENT_URLS_2KT + "(" + LEVEL + ");");
-
-            //1.2 Tạo bảng con
-            db.execSQL(createThuoc2kt_child);   // Bảng 2kt
-            //db.execSQL(String.format(CREATE_TABLE_THUOC_CHILD, TABLE_THUOC_2KT, TABLE_PARENT_URLS_2KT));
-
-            //-- Index để tối ưu truy vấn:
-            // Index để join nhanh
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_2KT +"(" + DBHelperThuoc.ID_URL +");"   //để tăng tốc join.
-            );
-            // Thêm index riêng cho maThuoc
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
-                    TABLE_THUOC_2KT +"(" + DBHelperThuoc.MA_THUOC +");"
-            );
-
-    //        CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON Thuoc(maThuoc);
-    //        CREATE INDEX IF NOT EXISTS idx_thuoc_url ON Thuoc(url);
-
-            db.execSQL(createThuoc2kt_child.replace(TABLE_THUOC_2KT, TABLE_THUOC_3KT)
-                    .replace(TABLE_PARENT_URLS_2KT, TABLE_PARENT_URLS_3KT));   // Bảng 3kt
-            //db.execSQL(String.format(CREATE_TABLE_THUOC_CHILD, TABLE_THUOC_3KT, TABLE_PARENT_URLS_3KT));
-            // Index để join nhanh
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_3KT +"(" + DBHelperThuoc.ID_URL +");"
-            );
-            // Thêm index riêng cho maThuoc
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
-                    TABLE_THUOC_3KT +"(" + DBHelperThuoc.MA_THUOC +");"
-            );
-
-            db.execSQL(createThuoc2kt_child.replace(TABLE_THUOC_2KT, TABLE_THUOC_CUSTOM)
-                    .replace(TABLE_PARENT_URLS_2KT, TABLE_PARENT_URLS_CUSTOM));   // Bảng custom
-
-            //db.execSQL(String.format(CREATE_TABLE_THUOC_CHILD, TABLE_THUOC_CUSTOM, TABLE_PARENT_URLS_CUSTOM));
-            // Index để join nhanh
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_urlId ON " +
-                    TABLE_THUOC_CUSTOM +"(" + DBHelperThuoc.ID_URL +");"
-            );
-            // Thêm index riêng cho maThuoc
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_thuoc_maThuoc ON " +
-                    TABLE_THUOC_CUSTOM +"(" + DBHelperThuoc.MA_THUOC +");"
-            );
-
-            //3. Checkpoint bền vững để phục hồi
-            //Thêm bảng checkpoint (tuỳ chọn nhưng rất hữu ích):
-            db.execSQL("CREATE TABLE IF NOT EXISTS CrawlCheckpoint (" +
-                    "  id INTEGER PRIMARY KEY CHECK (id=1), " +
-                    "  last_flush_seq INTEGER DEFAULT 0, " +      //-- số gói đã flush gần nhất
-                    "  last_flush_time INTEGER, " +               //-- epoch millis
-                    "  pending_in_queue INTEGER DEFAULT 0, " +    //-- ước lượng hàng đợi
-                    "  version INTEGER DEFAULT 1);"
-            );
-
-            //4. Tạo Bản URL QUEUE để cào: BẢNG QUEUE GIỐNG BẢNG CHA(PARENT): XEM LẠI ĐỂ TINH GỌN
-            String createQueue2KT = String.format(CREATE_URL_QUEUE_COMMON, TABLE_URLS_QUEUE_2KT);
-            Log.d(TAG, "Creating queue table: " + createQueue2KT);  // Log để tìm lỗi
-            db.execSQL(createQueue2KT);
-
-            db.execSQL(createQueue2KT.replace(TABLE_URLS_QUEUE_2KT, TABLE_URLS_QUEUE_3KT));
-
-            db.execSQL(createQueue2KT.replace(TABLE_URLS_QUEUE_2KT, TABLE_URLS_QUEUE_CUSTOM));
-
-         */
-
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS drug_queue (" +
+                        "maThuoc TEXT PRIMARY KEY," +
+                        "detailUrl TEXT," +
+                        "crawled INTEGER DEFAULT 0)"
+        );
     }
 
     @Override
@@ -482,6 +418,75 @@ public class DBHelperThuoc extends SQLiteOpenHelper {
         }
         return db;
     }
+
+    // Mới: theo giao diện ThuocBietDuoc mói
+    // Save checkpoint page
+    public synchronized void saveCurrentPage(
+            int page
+    ) {
+
+        SQLiteDatabase db =
+                getWritableDatabase();
+
+        ContentValues cv =
+                new ContentValues();
+
+        cv.put("id", 1);
+        cv.put("current_page", page);
+
+        db.insertWithOnConflict(
+                "crawl_state",
+                null,
+                cv,
+                SQLiteDatabase.CONFLICT_REPLACE
+        );
+    }
+
+    // Load checkpoint
+    public synchronized int getCurrentPage() {
+
+        SQLiteDatabase db =
+                getReadableDatabase();
+
+        Cursor c = db.rawQuery(
+                "SELECT current_page FROM crawl_state WHERE id=1",
+                null
+        );
+
+        int page = 1;
+
+        if (c.moveToFirst()) {
+            page = c.getInt(0);
+        }
+
+        c.close();
+
+        return page;
+    }
+
+    // Save queue
+    public synchronized void insertDrug(
+            DrugItem item
+    ) {
+
+        SQLiteDatabase db =
+                getWritableDatabase();
+
+        ContentValues cv =
+                new ContentValues();
+
+        cv.put("maThuoc", item.maThuoc);
+        cv.put("detailUrl", item.detailUrl);
+
+        db.insertWithOnConflict(
+                "drug_queue",
+                null,
+                cv,
+                SQLiteDatabase.CONFLICT_IGNORE
+        );
+    }
+
+    // Của phẩn: giao diện ThuocBietDuoc CŨ
 
     /**
      * 5. Ví dụ hàm Ghi Dữ Liệu: Sử dụng WriteLock
